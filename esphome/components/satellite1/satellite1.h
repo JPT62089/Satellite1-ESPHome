@@ -141,7 +141,10 @@ class Satellite1 : public Component,
    *                     unsigned integer.
    */
   uint8_t get_dc_status(DC_STATUS_REGISTER::register_id reg) {
-    assert(reg < DC_STATUS_REGISTER::REGISTER_LEN);
+    if (reg >= DC_STATUS_REGISTER::REGISTER_LEN) {
+      ESP_LOGE("Satellite1", "get_dc_status: register id %d out of bounds", reg);
+      return 0;
+    }
     return this->dc_status_register_[reg];
   }
 
