@@ -181,5 +181,13 @@ void Satellite1::xmos_hardware_reset() {
   delay(100);
 }
 
+uint8_t Satellite1::get_dc_status(DC_STATUS_REGISTER::register_id reg) {
+  if (reg >= DC_STATUS_REGISTER::REGISTER_LEN) {
+    ESP_LOGE(TAG, "get_dc_status: register id %u out of bounds", reg);
+    return 0;
+  }
+  return this->dc_status_register_[reg];
+}
+
 }  // namespace satellite1
 }  // namespace esphome
