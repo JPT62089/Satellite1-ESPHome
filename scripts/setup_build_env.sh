@@ -1,5 +1,5 @@
 #!/bin/bash
-PYTHON=python3
+PYTHON=python3.11
 venv=".venv"
 esphome="esphome"
 

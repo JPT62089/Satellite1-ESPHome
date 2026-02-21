@@ -181,7 +181,7 @@ static void transport_task_(std::string server, uint32_t port, std::shared_ptr<C
     }
 
     // === Create socket and connect ===
-    int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    int sock = ::socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
     if (sock < 0) {
       ESP_LOGE("transport", "Failed to create socket: errno %d", errno);
       xTaskNotify(stream_task_handle, CONNECTION_FAILED_BIT, eSetBits);
