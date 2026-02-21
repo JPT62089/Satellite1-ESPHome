@@ -119,7 +119,6 @@ bool Satellite1::transfer(uint8_t resource_id, uint8_t command, uint8_t *payload
   // Got status register report
   if (send_recv_buf[0] == DC_RESOURCE::CNTRL_ID && send_recv_buf[1] != DC_RET_STATUS::PAYLOAD_AVAILABLE) {
     memcpy(this->dc_status_register_, &send_recv_buf[2], DC_STATUS_REGISTER::REGISTER_LEN);
-    uint8_t *arr = this->dc_status_register_;
   }
 
   if (command & CONTROL_CMD_READ_BIT) {
