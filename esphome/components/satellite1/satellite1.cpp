@@ -95,6 +95,12 @@ bool Satellite1::transfer(uint8_t resource_id, uint8_t command, uint8_t *payload
   uint8_t send_recv_buf[256 + 3] = {0};
   int status_report_dummies = std::max<int>(0, DC_STATUS_REGISTER::REGISTER_LEN - payload_len - 1);
 
+  if (payload_len + 3 + status_report_dummies > sizeof(send_recv_buf)) {
+    ESP_LOGE(TAG, "transfer size %d exceeds buffer size %d", payload_len + 3 + status_report_dummies,
+             (int) sizeof(send_recv_buf));
+    return false;
+  }
+
   int attempts = 3;
   do {
     send_recv_buf[0] = resource_id;
