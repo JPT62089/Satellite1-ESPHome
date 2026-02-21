@@ -84,7 +84,6 @@ std::string Satellite1::status_string() {
 
 bool Satellite1::request_status_register_update() {
   bool ret = this->transfer(0, 0, NULL, 0);
-  uint8_t *arr = this->dc_status_register_;
   return ret;
 }
 
