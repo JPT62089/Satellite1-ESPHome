@@ -127,6 +127,7 @@ void SpeakerMediaPlayer::handle_play_item_(MediaCallCommand &cmd) {
 
   if (this->single_pipeline_() || (cmd.announce.has_value() && cmd.announce.value())) {
     if (!enqueue) {
+      // Ensure the loaded next item doesn't start playing, clear the queue, start the file, and unpause
       this->cancel_timeout("next_ann");
       this->announcement_playlist_.clear();
       this->announcement_pipeline_->set_pause_state(false);
@@ -135,8 +136,11 @@ void SpeakerMediaPlayer::handle_play_item_(MediaCallCommand &cmd) {
     this->announcement_playlist_.push_back(playlist_item);
   } else {
     if (!enqueue) {
+      // Ensure the loaded next item doesn't start playing, clear the queue, start the file, and unpause
       this->cancel_timeout("next_media");
       this->media_playlist_.clear();
+      // If paused, stop the media pipeline and unpause it after confirming its stopped. This avoids playing a
+      // short segment of the paused file before starting the new one.
       if (this->is_paused_) {
         this->media_pipeline_->stop();
         this->set_retry("unpause_med", 50, 3, [this](const uint8_t remaining_attempts) {
@@ -155,6 +159,9 @@ void SpeakerMediaPlayer::handle_play_item_(MediaCallCommand &cmd) {
 }
 
 void SpeakerMediaPlayer::handle_transport_command_(const MediaCallCommand &cmd) {
+  if (!cmd.command.has_value())
+    return;
+
   switch (cmd.command.value()) {
     case media_player::MEDIA_PLAYER_COMMAND_PLAY:
       if ((this->media_pipeline_ != nullptr) && (this->is_paused_)) {
@@ -169,6 +176,8 @@ void SpeakerMediaPlayer::handle_transport_command_(const MediaCallCommand &cmd) 
           this->cancel_timeout("next_ann");
           this->announcement_playlist_.clear();
           this->announcement_pipeline_->stop();
+          // Pipelines do not stop immediately after calling the stop command, so confirm its stopped before unpausing.
+          // This avoids an audible short segment playing after receiving the stop command in a paused state.
           this->set_retry("unpause_ann", 50, 3, [this](const uint8_t remaining_attempts) {
             if (this->announcement_pipeline_state_ == AudioPipelineState::STOPPED) {
               this->announcement_pipeline_->set_pause_state(false);
