@@ -1,0 +1,103 @@
+#ifdef USE_ESP32
+
+#include "visualizer_effect.h"
+
+#include <algorithm>
+#include <cmath>
+
+namespace esphome {
+namespace audio_visualizer {
+
+// --- Preset 1: Spectrum Ring ---
+void SpectrumRingEffect::apply(light::AddressableLight &it, const Color &current_color) {
+  if (!this->viz_)
+    return;
+  float bands[NUM_BANDS] = {};
+  this->viz_->get_bands(bands);
+  int count = std::min((int) it.size(), (int) NUM_BANDS);
+  for (int i = 0; i < count; i++) {
+    // Hue sweeps from 0.67 (blue) at bass to 0.0 (red) at treble
+    float hue = (count > 1) ? 0.67f * (1.0f - (float) i / (count - 1)) : 0.67f;
+    float brightness = std::min(1.0f, bands[i]);
+    it[i] = hsv_to_color(hue, 1.0f, brightness);
+  }
+  it.schedule_show();
+}
+
+// --- Preset 2: Pulse / Beat ---
+void PulseBeatEffect::apply(light::AddressableLight &it, const Color &current_color) {
+  if (!this->viz_)
+    return;
+  float rms = this->viz_->get_rms();
+  bool beat = this->viz_->consume_beat();
+
+  // Asymmetric envelope: fast attack, slow decay
+  if (rms > this->smoothed_) {
+    this->smoothed_ = 0.8f * rms + 0.2f * this->smoothed_;
+  } else {
+    this->smoothed_ = 0.1f * rms + 0.9f * this->smoothed_;
+  }
+
+  if (beat)
+    this->beat_flash_ = 1.0f;
+  this->beat_flash_ *= 0.75f;  // decay flash over several frames
+
+  float brightness = std::min(1.0f, this->smoothed_ + this->beat_flash_ * 0.5f);
+  // Desaturate toward white on beat flash
+  float sat = 1.0f - this->beat_flash_ * 0.7f;
+  Color c = hsv_to_color(0.57f, sat, brightness);  // sky-blue base
+  for (int i = 0; i < it.size(); i++)
+    it[i] = c;
+  it.schedule_show();
+}
+
+// --- Preset 3: VU Sweep ---
+void VUSweepEffect::apply(light::AddressableLight &it, const Color &current_color) {
+  if (!this->viz_)
+    return;
+  float rms = this->viz_->get_rms();
+  int lit = (int) (rms * it.size() + 0.5f);
+  lit = std::max(0, std::min((int) it.size(), lit));
+  for (int i = 0; i < it.size(); i++) {
+    if (i < lit) {
+      float t = (it.size() > 1) ? (float) i / (it.size() - 1) : 0.0f;
+      Color c;
+      if (t < 0.5f) {
+        // green to yellow
+        c = Color((uint8_t) (t * 2.0f * 255), 255, 0);
+      } else {
+        // yellow to red
+        c = Color(255, (uint8_t) ((1.0f - (t - 0.5f) * 2.0f) * 255), 0);
+      }
+      it[i] = c;
+    } else {
+      it[i] = Color(0, 0, 0);
+    }
+  }
+  it.schedule_show();
+}
+
+// --- Preset 4: Waveform Orbit ---
+void WaveformOrbitEffect::apply(light::AddressableLight &it, const Color &current_color) {
+  if (!this->viz_)
+    return;
+  float rms = this->viz_->get_rms();
+
+  // Push new sample into the circular history buffer
+  this->history_[this->head_] = rms;
+  this->head_ = (this->head_ + 1) % NUM_BANDS;
+
+  // LED 0 = most recent value, LED N-1 = oldest
+  int count = std::min((int) it.size(), (int) NUM_BANDS);
+  for (int i = 0; i < count; i++) {
+    uint32_t idx = (this->head_ + NUM_BANDS - 1 - i) % NUM_BANDS;
+    float brightness = std::min(1.0f, this->history_[idx]);
+    it[i] = hsv_to_color(0.57f, 1.0f, brightness);
+  }
+  it.schedule_show();
+}
+
+}  // namespace audio_visualizer
+}  // namespace esphome
+
+#endif  // USE_ESP32
