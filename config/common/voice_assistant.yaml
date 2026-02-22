@@ -171,14 +171,6 @@ voice_assistant:
         id: media_mixing_input
         decibel_reduction: 0   # 0 dB means no reduction
         duration: 1.0s
-    # Stop the script that would potentially enable the stop word if the response is longer than a second
-    - script.stop: activate_stop_word_if_tts_step_is_long
-    # Disable the stop word (If the tiemr is not ringing)
-    - if:
-        condition:
-          switch.is_off: timer_ringing
-        then:
-    # - lambda: id(stop).disable();
     # If the end happened because of an error, let the error phase on for a second
     - if:
         condition:
@@ -201,16 +193,6 @@ voice_assistant:
     - script.execute: control_leds
 
 script:
-  # Script used activate the stop word if the TTS step is long.
-  # Why is this wrapped on a script?
-  #   Becasue we want to stop the sequence if the TTS step is faster than that.
-  #   This allows us to prevent having the deactivation of the stop word before its own activation.
-  - id: activate_stop_word_if_tts_step_is_long
-    then:
-      - delay: 1s
-      # Enable stop wake word
-      # - lambda: id(stop).enable();
-
   - id: activate_stop_word_once
     then:
       - delay: 1s
