@@ -25,12 +25,8 @@ enum EventGroupBits : uint32_t {
   // Stops all activity in the pipeline elements; cleared by process_state() and set by stop() or by each task
   PIPELINE_COMMAND_STOP = (1 << 0),
 
-  // Read audio from an HTTP source; cleared by reader task and set by start_url
-  READER_COMMAND_INIT_HTTP = (1 << 4),
-  // Read audio from an audio file from the flash; cleared by reader task and set by start_file
-  READER_COMMAND_INIT_FILE = (1 << 5),
-  // Read audio from a snapcast server; cleared by reader task and set by start_snapcast
-  READER_COMMAND_INIT_SNAPCAST = (1 << 6),
+  // Initialise the reader with current_source_; cleared by reader task
+  READER_COMMAND_INIT = (1 << 4),
 
   // Audio file type is read after checking it is supported; cleared by decoder task
   READER_MESSAGE_LOADED_MEDIA_TYPE = (1 << 7),
@@ -60,16 +56,20 @@ void AudioPipeline::start_url(const std::string &uri) {
   if (this->is_playing_) {
     xEventGroupSetBits(this->event_group_, PIPELINE_COMMAND_STOP);
   }
-  this->current_uri_ = uri;
-  this->pending_url_ = true;
+  PipelineSource source;
+  source.type = PipelineSourceType::URL;
+  source.uri = uri;
+  this->pending_source_ = source;
 }
 
 void AudioPipeline::start_file(audio::AudioFile *audio_file) {
   if (this->is_playing_) {
     xEventGroupSetBits(this->event_group_, PIPELINE_COMMAND_STOP);
   }
-  this->current_audio_file_ = audio_file;
-  this->pending_file_ = true;
+  PipelineSource source;
+  source.type = PipelineSourceType::FILE;
+  source.audio_file = audio_file;
+  this->pending_source_ = source;
 }
 
 #if USE_SNAPCAST
@@ -77,8 +77,10 @@ void AudioPipeline::start_snapcast(snapcast::SnapcastStream *stream) {
   if (this->is_playing_) {
     xEventGroupSetBits(this->event_group_, PIPELINE_COMMAND_STOP);
   }
-  this->snapcast_stream_ = stream;
-  this->pending_snapcast_ = true;
+  PipelineSource source;
+  source.type = PipelineSourceType::SNAPCAST;
+  source.snapcast_stream = stream;
+  this->pending_source_ = source;
 }
 #endif
 
@@ -162,11 +164,7 @@ AudioPipelineState AudioPipeline::process_state() {
 
   EventBits_t event_bits = xEventGroupGetBits(this->event_group_);
 
-#if USE_SNAPCAST
-  if (this->pending_url_ || this->pending_file_ || this->pending_snapcast_) {
-#else
-  if (this->pending_url_ || this->pending_file_) {
-#endif
+  if (this->pending_source_.has_value()) {
     // Init command pending
     if (!(event_bits & EventGroupBits::PIPELINE_COMMAND_STOP) && !this->is_playing_) {
       // Only start if there is no pending stop command
@@ -175,22 +173,11 @@ AudioPipelineState AudioPipeline::process_state() {
         this->start_tasks_();
       }
 
-      if (this->pending_url_) {
-        xEventGroupSetBits(this->event_group_, EventGroupBits::READER_COMMAND_INIT_HTTP);
-        this->playback_ms_ = 0;
-        this->pending_url_ = false;
-      } else if (this->pending_file_) {
-        xEventGroupSetBits(this->event_group_, EventGroupBits::READER_COMMAND_INIT_FILE);
-        this->playback_ms_ = 0;
-        this->pending_file_ = false;
-      }
-#if USE_SNAPCAST
-      else if (this->pending_snapcast_) {
-        xEventGroupSetBits(this->event_group_, EventGroupBits::READER_COMMAND_INIT_SNAPCAST);
-        this->playback_ms_ = 0;
-        this->pending_snapcast_ = false;
-      }
-#endif
+      this->current_source_ = this->pending_source_;
+      this->pending_source_.reset();
+      this->playback_ms_ = 0;
+      xEventGroupSetBits(this->event_group_, EventGroupBits::READER_COMMAND_INIT);
+
       this->is_playing_ = true;
       this->hard_stop_ = false;
       return AudioPipelineState::PLAYING;
@@ -354,12 +341,7 @@ void AudioPipeline::read_task(void *params) {
     xEventGroupSetBits(this_pipeline->event_group_, EventGroupBits::READER_MESSAGE_FINISHED);
 
     // Wait until the pipeline notifies us the source of the media file
-    const EventBits_t waiting_bits =
-        (EventGroupBits::READER_COMMAND_INIT_FILE | EventGroupBits::READER_COMMAND_INIT_HTTP
-#if USE_SNAPCAST
-         | EventGroupBits::READER_COMMAND_INIT_SNAPCAST
-#endif
-         | EventGroupBits::PIPELINE_COMMAND_STOP);
+    const EventBits_t waiting_bits = (EventGroupBits::READER_COMMAND_INIT | EventGroupBits::PIPELINE_COMMAND_STOP);
     EventBits_t event_bits = xEventGroupWaitBits(this_pipeline->event_group_,
                                                  waiting_bits,    // Bit message to read
                                                  pdFALSE,         // Clear the bit on exit
@@ -367,13 +349,8 @@ void AudioPipeline::read_task(void *params) {
                                                  portMAX_DELAY);  // Block indefinitely until bit is set
 
     if (!(event_bits & EventGroupBits::PIPELINE_COMMAND_STOP)) {
-      xEventGroupClearBits(this_pipeline->event_group_, EventGroupBits::READER_MESSAGE_FINISHED |
-                                                            EventGroupBits::READER_COMMAND_INIT_FILE |
-                                                            EventGroupBits::READER_COMMAND_INIT_HTTP
-#if USE_SNAPCAST
-                                                            | EventGroupBits::READER_COMMAND_INIT_SNAPCAST
-#endif
-      );
+      xEventGroupClearBits(this_pipeline->event_group_,
+                           EventGroupBits::READER_MESSAGE_FINISHED | EventGroupBits::READER_COMMAND_INIT);
 
       InfoErrorEvent event;
       event.source = InfoErrorSource::READER;
@@ -382,16 +359,20 @@ void AudioPipeline::read_task(void *params) {
       std::unique_ptr<audio::AudioReader> reader =
           make_unique<audio::AudioReader>(this_pipeline->transfer_buffer_size_, this_pipeline->reader_output_rb_);
 
-      if (event_bits & EventGroupBits::READER_COMMAND_INIT_FILE) {
-        err = reader->start(this_pipeline->current_audio_file_, this_pipeline->current_audio_file_type_);
-      } else if (event_bits & EventGroupBits::READER_COMMAND_INIT_HTTP) {
-        err = reader->start(this_pipeline->current_uri_, this_pipeline->current_audio_file_type_);
-      }
+      const PipelineSource &src = this_pipeline->current_source_.value();
+      switch (src.type) {
+        case PipelineSourceType::FILE:
+          err = reader->start(src.audio_file, this_pipeline->current_audio_file_type_);
+          break;
+        case PipelineSourceType::URL:
+          err = reader->start(src.uri, this_pipeline->current_audio_file_type_);
+          break;
 #if USE_SNAPCAST
-      else if (event_bits & EventGroupBits::READER_COMMAND_INIT_SNAPCAST) {
-        err = reader->start(this_pipeline->snapcast_stream_, this_pipeline->current_audio_file_type_);
-      }
+        case PipelineSourceType::SNAPCAST:
+          err = reader->start(src.snapcast_stream, this_pipeline->current_audio_file_type_);
+          break;
 #endif
+      }
 
       if (err != ESP_OK) {
         // Send specific error message

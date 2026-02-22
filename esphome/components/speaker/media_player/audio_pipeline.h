@@ -30,6 +30,23 @@ enum class AudioPipelineType : uint8_t {
   ANNOUNCEMENT,
 };
 
+enum class PipelineSourceType : uint8_t {
+  URL,
+  FILE,
+#if USE_SNAPCAST
+  SNAPCAST,
+#endif
+};
+
+struct PipelineSource {
+  PipelineSourceType type;
+  std::string uri;
+  audio::AudioFile *audio_file{nullptr};
+#if USE_SNAPCAST
+  snapcast::SnapcastStream *snapcast_stream{nullptr};
+#endif
+};
+
 enum class AudioPipelineState : uint8_t {
   STARTING_FILE,
   STARTING_URL,
@@ -118,6 +135,11 @@ class AudioPipeline {
   /// @brief Resets the task related pointers and deallocates their stacks.
   void delete_tasks_();
 
+  void drain_info_queue_();
+  bool try_start_pending_();
+  AudioPipelineState check_errors_();
+  bool check_completion_();
+
   std::string base_name_;
   UBaseType_t priority_;
 
@@ -128,19 +150,10 @@ class AudioPipeline {
   bool pause_state_{false};
   bool task_stack_in_psram_;
 
-  // Pending file start state used to ensure the pipeline fully stops before attempting to start the next file
-  bool pending_url_{false};
-  bool pending_file_{false};
-#if USE_SNAPCAST
-  bool pending_snapcast_{false};
-#endif
   speaker::Speaker *speaker_{nullptr};
 
-  std::string current_uri_{};
-  audio::AudioFile *current_audio_file_{nullptr};
-#if USE_SNAPCAST
-  snapcast::SnapcastStream *snapcast_stream_{nullptr};
-#endif
+  optional<PipelineSource> pending_source_;
+  optional<PipelineSource> current_source_;
   audio::AudioFileType current_audio_file_type_;
   audio::AudioStreamInfo current_audio_stream_info_;
 
