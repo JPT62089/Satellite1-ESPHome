@@ -14,6 +14,8 @@
 #include "esphome/core/defines.h"
 #include "esphome/core/preferences.h"
 
+#include <memory>
+
 #ifdef USE_OTA_STATE_LISTENER
 #include "esphome/components/ota/ota_backend.h"
 #endif
@@ -94,9 +96,9 @@ class SpeakerMediaPlayer : public Component,
   }
 #endif
 
-  Trigger<> *get_mute_trigger() const { return this->mute_trigger_; }
-  Trigger<> *get_unmute_trigger() const { return this->unmute_trigger_; }
-  Trigger<float> *get_volume_trigger() const { return this->volume_trigger_; }
+  Trigger<> *get_mute_trigger() const { return this->mute_trigger_.get(); }
+  Trigger<> *get_unmute_trigger() const { return this->unmute_trigger_.get(); }
+  Trigger<float> *get_volume_trigger() const { return this->volume_trigger_.get(); }
 
   void play_file(audio::AudioFile *media_file, bool announcement, bool enqueue);
 #if USE_SNAPCAST
@@ -166,9 +168,9 @@ class SpeakerMediaPlayer : public Component,
   // Used to save volume/mute state for restoration on reboot
   ESPPreferenceObject pref_;
 
-  Trigger<> *mute_trigger_ = new Trigger<>();
-  Trigger<> *unmute_trigger_ = new Trigger<>();
-  Trigger<float> *volume_trigger_ = new Trigger<float>();
+  std::unique_ptr<Trigger<>> mute_trigger_{new Trigger<>()};
+  std::unique_ptr<Trigger<>> unmute_trigger_{new Trigger<>()};
+  std::unique_ptr<Trigger<float>> volume_trigger_{new Trigger<float>()};
 };
 
 }  // namespace speaker

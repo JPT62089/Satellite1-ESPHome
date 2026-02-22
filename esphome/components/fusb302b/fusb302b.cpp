@@ -97,7 +97,13 @@ static void trigger_task(void *params) {
   FUSB302B *fusb302b = (FUSB302B *) params;
   uint32_t ulNotificationValue;
 
-  pd_message_queue = xQueueCreate(5, sizeof(PDEventInfo));
+  if (pd_message_queue == NULL) {
+    pd_message_queue = xQueueCreate(5, sizeof(PDEventInfo));
+    if (pd_message_queue == NULL) {
+      ESP_LOGE(TAG, "Failed to create pd_message_queue.");
+      return;
+    }
+  }
 
   gpio_num_t irq_gpio_pin = static_cast<gpio_num_t>(fusb302b->irq_pin_);
 
@@ -116,8 +122,14 @@ static void trigger_task(void *params) {
   gpio_isr_handler_add(irq_gpio_pin, fusb302b_isr_handler, NULL);
 
   // Create the task that will wait for notifications
-  xTaskCreatePinnedToCore(msg_reader_task, "fusb3202b_read_task", 4096, fusb302b, configMAX_PRIORITIES / 2,
-                          &xReaderTaskHandle, 1);
+  if (xReaderTaskHandle == NULL) {
+    xTaskCreatePinnedToCore(msg_reader_task, "fusb3202b_read_task", 4096, fusb302b, configMAX_PRIORITIES / 2,
+                            &xReaderTaskHandle, 1);
+    if (xReaderTaskHandle == NULL) {
+      ESP_LOGE(TAG, "Failed to create fusb3202b_read_task.");
+      return;
+    }
+  }
   PDEventInfo event_info;
 
   while (true) {
@@ -276,7 +288,13 @@ void FUSB302B::check_status_() {
         this->startup_delay_ = 0;
 
         // Create the task that will wait for notifications
-        xTaskCreatePinnedToCore(trigger_task, "fusb3202b_task", 4096, this, 18, &xProcessTaskHandle, 1);
+        if (xProcessTaskHandle == NULL) {
+          xTaskCreatePinnedToCore(trigger_task, "fusb3202b_task", 4096, this, 18, &xProcessTaskHandle, 1);
+          if (xProcessTaskHandle == NULL) {
+            ESP_LOGE(TAG, "Failed to create fusb3202b_task.");
+            return;
+          }
+        }
         delay(1);
       } else {
         this->enable_auto_crc();

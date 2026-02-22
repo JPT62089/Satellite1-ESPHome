@@ -84,7 +84,6 @@ std::string Satellite1::status_string() {
 
 bool Satellite1::request_status_register_update() {
   bool ret = this->transfer(0, 0, NULL, 0);
-  uint8_t *arr = this->dc_status_register_;
   return ret;
 }
 
@@ -95,6 +94,12 @@ bool Satellite1::transfer(uint8_t resource_id, uint8_t command, uint8_t *payload
 
   uint8_t send_recv_buf[256 + 3] = {0};
   int status_report_dummies = std::max<int>(0, DC_STATUS_REGISTER::REGISTER_LEN - payload_len - 1);
+
+  if (payload_len + 3 + status_report_dummies > sizeof(send_recv_buf)) {
+    ESP_LOGE(TAG, "transfer size %d exceeds buffer size %d", payload_len + 3 + status_report_dummies,
+             (int) sizeof(send_recv_buf));
+    return false;
+  }
 
   int attempts = 3;
   do {
@@ -120,7 +125,6 @@ bool Satellite1::transfer(uint8_t resource_id, uint8_t command, uint8_t *payload
   // Got status register report
   if (send_recv_buf[0] == DC_RESOURCE::CNTRL_ID && send_recv_buf[1] != DC_RET_STATUS::PAYLOAD_AVAILABLE) {
     memcpy(this->dc_status_register_, &send_recv_buf[2], DC_STATUS_REGISTER::REGISTER_LEN);
-    uint8_t *arr = this->dc_status_register_;
   }
 
   if (command & CONTROL_CMD_READ_BIT) {
@@ -181,6 +185,14 @@ void Satellite1::xmos_hardware_reset() {
   delay(100);
   this->xmos_rst_pin_->digital_write(0);
   delay(100);
+}
+
+uint8_t Satellite1::get_dc_status(DC_STATUS_REGISTER::register_id reg) {
+  if (reg >= DC_STATUS_REGISTER::REGISTER_LEN) {
+    ESP_LOGE(TAG, "get_dc_status: register id %u out of bounds", reg);
+    return 0;
+  }
+  return this->dc_status_register_[reg];
 }
 
 }  // namespace satellite1

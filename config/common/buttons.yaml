@@ -69,13 +69,13 @@ binary_sensor:
       satellite1:
       port: INPUT_A
       pin: 3
-      inverted: false
+      inverted: true
     name: "Button Left (HW Mute)"
     icon: "mdi:microphone-off"
-    on_state:
+    on_press:
       - if:
           condition:
-            binary_sensor.is_off: btn_left
+            switch.is_on: master_mute_switch
           then:
             - script.execute:
                 id: play_sound
@@ -127,44 +127,7 @@ binary_sensor:
                 - event.trigger:
                     id: action_button_press_event
                     event_type: "single_press"
-                - if:
-                    condition:
-                      switch.is_on: timer_ringing
-                    then:
-                      - switch.turn_off: timer_ringing
-                    else:
-                      - if:
-                          condition:
-                            voice_assistant.is_running:
-                          then:
-                            - voice_assistant.stop:
-                          else:
-                            - if:
-                                condition:
-                                  media_player.is_announcing:
-                                then:
-                                  media_player.stop:
-                                    announcement: true
-                                else:
-                                  - if:
-                                      condition:
-                                        media_player.is_playing:
-                                      then:
-                                        - media_player.pause:
-                                      else:
-                                        - if:
-                                            condition:
-                                              and:
-                                                - switch.is_off: master_mute_switch
-                                                - not:
-                                                    voice_assistant.is_running
-                                            then:
-                                              - script.execute:
-                                                  id: play_sound
-                                                  priority: true
-                                                  sound_file: !lambda return id(center_button_press_sound);
-                                              - delay: 300ms
-                                              - voice_assistant.start:
+                - script.execute: handle_single_press
       # Double Click
       #  . Exposed as an event entity. To be used in automations inside Home Assistant
       - timing:
@@ -241,7 +204,9 @@ binary_sensor:
                     priority: true
                     sound_file: !lambda return id(factory_reset_initiated_sound);
                 - wait_until:
-                    binary_sensor.is_off: btn_action
+                    condition:
+                      binary_sensor.is_off: btn_action
+                    timeout: 30s
                 - light.turn_off: voice_assistant_leds
                 - script.execute:
                     id: play_sound
@@ -264,3 +229,47 @@ binary_sensor:
                       - memory_flasher.erase:
                     else:
                       - button.press: factory_reset_button
+
+script:
+  # Script executed when the action button is single-pressed.
+  # Handles the priority chain: timer -> voice assistant -> announcement -> music -> start VA.
+  - id: handle_single_press
+    then:
+      - if:
+          condition:
+            switch.is_on: timer_ringing
+          then:
+            - switch.turn_off: timer_ringing
+            - script.stop: handle_single_press
+      - if:
+          condition:
+            voice_assistant.is_running:
+          then:
+            - voice_assistant.stop:
+            - script.stop: handle_single_press
+      - if:
+          condition:
+            media_player.is_announcing:
+          then:
+            - media_player.stop:
+                announcement: true
+            - script.stop: handle_single_press
+      - if:
+          condition:
+            media_player.is_playing:
+          then:
+            - media_player.pause:
+            - script.stop: handle_single_press
+      - if:
+          condition:
+            and:
+              - switch.is_off: master_mute_switch
+              - not:
+                  voice_assistant.is_running
+          then:
+            - script.execute:
+                id: play_sound
+                priority: true
+                sound_file: !lambda return id(center_button_press_sound);
+            - delay: 300ms
+            - voice_assistant.start:

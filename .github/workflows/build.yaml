@@ -87,8 +87,24 @@ jobs:
         run: |
           file=config/satellite1.yaml
           tag="${{ needs.prepare.outputs.version }}"
-          sed -i "s/^\(\s*esp32_fw_version:\s*\).*/\1\"${tag}\"/" "$file"
-          
+          # Python must be flush-left (no indentation) to avoid IndentationError inside -c.
+          # tag is passed via sys.argv (not interpolated) to prevent injection; the lambda
+          # replacement avoids re.sub treating tag as a backreference pattern.
+          python3 -c "
+import re, sys
+tag, path = sys.argv[1], sys.argv[2]
+with open(path) as f:
+    content = f.read()
+content = re.sub(
+    r'^(\s*esp32_fw_version:\s*).*',
+    lambda m: m.group(1) + '\"' + tag + '\"',
+    content,
+    flags=re.MULTILINE
+)
+with open(path, 'w') as f:
+    f.write(content)
+" "$tag" "$file"
+
       - name: Check version update
         run: |
           grep esp32_fw_version config/satellite1.yaml

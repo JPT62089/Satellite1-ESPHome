@@ -140,10 +140,7 @@ class Satellite1 : public Component,
    * @return             The cached value of the requested status register as an 8-bit
    *                     unsigned integer.
    */
-  uint8_t get_dc_status(DC_STATUS_REGISTER::register_id reg) {
-    assert(reg < DC_STATUS_REGISTER::REGISTER_LEN);
-    return this->dc_status_register_[reg];
-  }
+  uint8_t get_dc_status(DC_STATUS_REGISTER::register_id reg);
 
   void set_spi_flash_direct_access_mode(bool enable);
 
