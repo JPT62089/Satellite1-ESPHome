@@ -12,6 +12,8 @@ namespace audio_visualizer {
 void SpectrumRingEffect::apply(light::AddressableLight &it, const Color &current_color) {
   if (!this->viz_)
     return;
+  if (!this->should_update_())
+    return;
   float bands[NUM_BANDS] = {};
   this->viz_->get_bands(bands);
   int count = std::min((int) it.size(), (int) NUM_BANDS);
@@ -21,12 +23,16 @@ void SpectrumRingEffect::apply(light::AddressableLight &it, const Color &current
     float brightness = std::min(1.0f, bands[i]);
     it[i] = hsv_to_color(hue, 1.0f, brightness);
   }
+  for (int i = count; i < it.size(); i++)
+    it[i] = Color(0, 0, 0);
   it.schedule_show();
 }
 
 // --- Preset 2: Pulse / Beat ---
 void PulseBeatEffect::apply(light::AddressableLight &it, const Color &current_color) {
   if (!this->viz_)
+    return;
+  if (!this->should_update_())
     return;
   float rms = this->viz_->get_rms();
   bool beat = this->viz_->consume_beat();
@@ -55,6 +61,8 @@ void PulseBeatEffect::apply(light::AddressableLight &it, const Color &current_co
 void VUSweepEffect::apply(light::AddressableLight &it, const Color &current_color) {
   if (!this->viz_)
     return;
+  if (!this->should_update_())
+    return;
   float rms = this->viz_->get_rms();
   int lit = (int) (rms * it.size() + 0.5f);
   lit = std::max(0, std::min((int) it.size(), lit));
@@ -81,6 +89,8 @@ void VUSweepEffect::apply(light::AddressableLight &it, const Color &current_colo
 void WaveformOrbitEffect::apply(light::AddressableLight &it, const Color &current_color) {
   if (!this->viz_)
     return;
+  if (!this->should_update_())
+    return;
   float rms = this->viz_->get_rms();
 
   // Push new sample into the circular history buffer
@@ -94,6 +104,8 @@ void WaveformOrbitEffect::apply(light::AddressableLight &it, const Color &curren
     float brightness = std::min(1.0f, this->history_[idx]);
     it[i] = hsv_to_color(0.57f, 1.0f, brightness);
   }
+  for (int i = count; i < it.size(); i++)
+    it[i] = Color(0, 0, 0);
   it.schedule_show();
 }
 
