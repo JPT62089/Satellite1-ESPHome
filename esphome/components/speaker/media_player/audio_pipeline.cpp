@@ -162,10 +162,9 @@ AudioPipelineState AudioPipeline::process_state() {
    * Determine the current state based on the event group bits and tasks' status
    */
 
-  EventBits_t event_bits = xEventGroupGetBits(this->event_group_);
-
   if (this->pending_source_.has_value()) {
     // Init command pending
+    EventBits_t event_bits = xEventGroupGetBits(this->event_group_);
     if (!(event_bits & EventGroupBits::PIPELINE_COMMAND_STOP) && !this->is_playing_) {
       // Only start if there is no pending stop command
       if ((this->read_task_handle_ == nullptr) || (this->decode_task_handle_ == nullptr)) {
@@ -183,6 +182,8 @@ AudioPipelineState AudioPipeline::process_state() {
       return AudioPipelineState::PLAYING;
     }
   }
+
+  EventBits_t event_bits = xEventGroupGetBits(this->event_group_);
 
   if ((event_bits & EventGroupBits::READER_MESSAGE_ERROR)) {
     xEventGroupClearBits(this->event_group_, EventGroupBits::READER_MESSAGE_ERROR);
@@ -372,6 +373,9 @@ void AudioPipeline::read_task(void *params) {
           err = reader->start(src.snapcast_stream, this_pipeline->current_audio_file_type_);
           break;
 #endif
+        default:
+          err = ESP_ERR_NOT_SUPPORTED;
+          break;
       }
 
       if (err != ESP_OK) {
