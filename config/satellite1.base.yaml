@@ -14,6 +14,7 @@ substitutions:
 
   esp32_fw_version: dev
   xmos_fw_version: "v1.0.3"
+  led_ring_count: "24"
 
 globals:
   # Global initialisation variable. Initialized to true and set to false once everything is connected. Only used to have a smooth "plugging" experience
@@ -134,7 +135,7 @@ memory_flasher:
 
     on_progress_update:
       then:
-        - lambda: id(global_led_animation_index) = id(xflash).flashing_progress * 24 / 100;
+        - lambda: id(global_led_animation_index) = id(xflash).flashing_progress * ${led_ring_count} / 100;
         - script.execute: control_leds
 
     on_flashing_success:
