@@ -12,6 +12,8 @@ namespace audio_visualizer {
 // HSV to ESPHome Color helper (h, s, v all in [0, 1])
 inline Color hsv_to_color(float h, float s, float v) {
   h = fmodf(h, 1.0f);
+  if (h < 0.0f)
+    h += 1.0f;
   float r = 0, g = 0, b = 0;
   int i = (int) (h * 6);
   float f = h * 6.0f - i;
@@ -58,9 +60,21 @@ class VisualizerEffect : public light::AddressableLightEffect {
  public:
   explicit VisualizerEffect(const char *name) : AddressableLightEffect(name) {}
   void set_visualizer(AudioVisualizerSpeaker *viz) { this->viz_ = viz; }
+  void set_update_interval(uint32_t ms) { this->update_interval_ = ms; }
 
  protected:
+  /// Returns true if enough time has elapsed since last_run_. Call at the start of apply().
+  bool should_update_() {
+    uint32_t now = millis();
+    if (now - this->last_run_ < this->update_interval_)
+      return false;
+    this->last_run_ = now;
+    return true;
+  }
+
   AudioVisualizerSpeaker *viz_{nullptr};
+  uint32_t update_interval_{33};
+  uint32_t last_run_{0};
 };
 
 // Preset 1: Spectrum Ring
