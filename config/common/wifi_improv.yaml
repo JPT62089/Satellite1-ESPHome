@@ -6,6 +6,8 @@ globals:
 
 wifi:
   id: wifi_id
+  power_save_mode: none
+  reboot_timeout: 15min
   on_connect:
     - lambda: id(improv_ble_in_progress) = false;
     - script.execute: control_leds
