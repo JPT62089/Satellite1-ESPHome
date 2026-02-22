@@ -225,9 +225,6 @@ AudioPipelineState AudioPipeline::process_state() {
   if (err_state != AudioPipelineState::PLAYING)
     return err_state;
 
-  if (this->check_completion_())
-    return AudioPipelineState::STOPPING;
-
   EventBits_t event_bits = xEventGroupGetBits(this->event_group_);
 
   if ((this->read_task_handle_ == nullptr) && (this->decode_task_handle_ == nullptr)) {
@@ -235,6 +232,9 @@ AudioPipelineState AudioPipeline::process_state() {
     this->is_playing_ = false;
     return AudioPipelineState::STOPPED;
   }
+
+  if (this->check_completion_())
+    return AudioPipelineState::STOPPING;
 
   if (event_bits & EventGroupBits::PIPELINE_COMMAND_STOP) {
     return AudioPipelineState::STOPPING;
