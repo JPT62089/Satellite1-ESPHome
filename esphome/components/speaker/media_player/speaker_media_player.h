@@ -171,7 +171,6 @@ class SpeakerMediaPlayer : public Component,
   std::unique_ptr<Trigger<>> mute_trigger_{new Trigger<>()};
   std::unique_ptr<Trigger<>> unmute_trigger_{new Trigger<>()};
   std::unique_ptr<Trigger<float>> volume_trigger_{new Trigger<float>()};
-
 };
 
 }  // namespace speaker
