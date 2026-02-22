@@ -561,6 +561,8 @@ script:
                          media_player::MediaPlayerState::MEDIA_PLAYER_STATE_PLAYING) {
             auto preset = id(visualizer_preset).current_option();
             auto call = id(voice_assistant_leds).make_call();
+            call.set_state(true);
+            call.set_brightness(std::max(id(led_ring).current_values.get_brightness(), 0.2f));
             if (preset == "Spectrum")
               call.set_effect("Visualizer Spectrum");
             else if (preset == "Pulse")
