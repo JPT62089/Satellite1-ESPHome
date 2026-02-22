@@ -49,6 +49,10 @@ class AudioVisualizerSpeaker : public Component, public speaker::Speaker {
 
   // Analysis results — read by LED effects
   float get_rms() const { return this->rms_.load(); }
+  /// Copies the current 24 band energies into @p out.
+  /// @p out must be pre-initialized (e.g. to zeros) — if the mutex is
+  /// contended, @p out is left unmodified and the caller retains its
+  /// previous values.
   void get_bands(float out[NUM_BANDS]) const;
   bool consume_beat() { return this->beat_.exchange(false); }
 
