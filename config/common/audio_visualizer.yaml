@@ -1,0 +1,42 @@
+speaker:
+  - platform: audio_visualizer
+    id: audio_viz
+    output_speaker: media_mixing_input
+    light: voice_assistant_leds
+    bits_per_sample: 16
+    num_channels: 2
+    sample_rate: 48000
+
+switch:
+  - platform: template
+    name: "Visualizer Enabled"
+    id: visualizer_enabled
+    icon: "mdi:equalizer"
+    entity_category: config
+    restore_mode: RESTORE_DEFAULT_ON
+    optimistic: true
+    on_turn_on:
+      - script.execute: control_leds
+    on_turn_off:
+      - script.execute: control_leds
+
+select:
+  - platform: template
+    name: "Visualizer Preset"
+    id: visualizer_preset
+    icon: "mdi:palette"
+    entity_category: config
+    options:
+      - "Spectrum"
+      - "Pulse"
+      - "VU Sweep"
+      - "Waveform"
+    initial_option: "Spectrum"
+    optimistic: true
+    restore_value: true
+    on_value:
+      - if:
+          condition:
+            switch.is_on: visualizer_enabled
+          then:
+            - script.execute: control_leds

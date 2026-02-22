@@ -159,7 +159,7 @@ speaker:
     bits_per_sample: 16
   - platform: resampler
     id: media_resampling_speaker
-    output_speaker: media_mixing_input
+    output_speaker: audio_viz
     sample_rate: 48000
     bits_per_sample: 16
 
@@ -200,19 +200,20 @@ media_player:
           duration: 0.0s
 
     on_state:
-      if:
-        condition:
-          and:
-            - switch.is_off: timer_ringing
-            - not:
-                voice_assistant.is_running:
-            - not:
-                media_player.is_announcing:
-        then:
-          - mixer_speaker.apply_ducking:
-              id: media_mixing_input
-              decibel_reduction: 0
-              duration: 1.0s
+      - script.execute: control_leds
+      - if:
+          condition:
+            and:
+              - switch.is_off: timer_ringing
+              - not:
+                  voice_assistant.is_running:
+              - not:
+                  media_player.is_announcing:
+          then:
+            - mixer_speaker.apply_ducking:
+                id: media_mixing_input
+                decibel_reduction: 0
+                duration: 1.0s
 
     files:
       - id: center_button_press_sound
