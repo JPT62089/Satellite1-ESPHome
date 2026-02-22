@@ -69,13 +69,13 @@ binary_sensor:
       satellite1:
       port: INPUT_A
       pin: 3
-      inverted: false
+      inverted: true
     name: "Button Left (HW Mute)"
     icon: "mdi:microphone-off"
-    on_state:
+    on_press:
       - if:
           condition:
-            binary_sensor.is_off: btn_left
+            switch.is_on: master_mute_switch
           then:
             - script.execute:
                 id: play_sound
