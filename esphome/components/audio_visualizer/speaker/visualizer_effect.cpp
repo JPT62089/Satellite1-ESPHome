@@ -20,7 +20,9 @@ void SpectrumRingEffect::apply(light::AddressableLight &it, const Color &current
   for (int i = 0; i < count; i++) {
     // Hue sweeps from 0.67 (blue) at bass to 0.0 (red) at treble
     float hue = (count > 1) ? 0.67f * (1.0f - (float) i / (count - 1)) : 0.67f;
-    float brightness = std::min(1.0f, bands[i]);
+    float val = bands[i];
+    // Sqrt compression so quieter high-frequency bands are still visible
+    float brightness = (val > 0.01f) ? std::min(1.0f, sqrtf(val)) : 0.0f;
     it[i] = hsv_to_color(hue, 1.0f, brightness);
   }
   for (int i = count; i < it.size(); i++)
