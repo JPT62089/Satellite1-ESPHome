@@ -153,9 +153,9 @@ light:
                 it[i] = color * 128;
               } else if (i == ( id(global_led_animation_index) + ${led_ring_count} / 2) % ${led_ring_count}) {
                 it[i] = color;
-              } else if (i == ( id(global_led_animation_index) + 13) % ${led_ring_count}) {
+              } else if (i == ( id(global_led_animation_index) + ${led_ring_count} / 2 + 1) % ${led_ring_count}) {
                 it[i] = color * 192;
-              } else if (i == ( id(global_led_animation_index) + 14) % ${led_ring_count}) {
+              } else if (i == ( id(global_led_animation_index) + ${led_ring_count} / 2 + 2) % ${led_ring_count}) {
                 it[i] = color * 128;
               } else {
                 it[i] = Color::BLACK;
@@ -467,7 +467,7 @@ light:
               auto light_color = id(led_ring).current_values;
               Color color(light_color.get_red() * 255, light_color.get_green() * 255,
                     light_color.get_blue() * 255);
-              if (index <= 12) {
+              if (index <= ${led_ring_count} / 2) {
                 for (int i = 0; i < ${led_ring_count}; i++) {
                   if (i == index) {
                     it[i] = color;
@@ -490,11 +490,11 @@ light:
               auto light_color = id(led_ring).current_values;
               Color color(light_color.get_red() * 255, light_color.get_green() * 255,
                     light_color.get_blue() * 255);
-              if (index <= 12) {
+              if (index <= ${led_ring_count} / 2) {
                 for (int i = 0; i < ${led_ring_count}; i++) {
-                  if (i == 12 - index) {
+                  if (i == ${led_ring_count} / 2 - index) {
                     it[i] = color;
-                  } else if (i == (12 + index) % ${led_ring_count}) {
+                  } else if (i == (${led_ring_count} / 2 + index) % ${led_ring_count}) {
                     it[i] = color;
                   } else {
                     it[i] = Color::BLACK;
