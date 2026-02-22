@@ -67,6 +67,9 @@ void AudioVisualizerSpeaker::stop() {
   memset(this->sample_window_, 0, sizeof(this->sample_window_));
   this->smoothed_rms_ = 0.0f;
   memset(this->smoothed_bands_, 0, sizeof(this->smoothed_bands_));
+  memset(this->bands_, 0, sizeof(this->bands_));
+  memset(this->bass_history_, 0, sizeof(this->bass_history_));
+  this->bass_history_idx_ = 0;
 }
 
 void AudioVisualizerSpeaker::finish() {
@@ -178,7 +181,8 @@ void AudioVisualizerSpeaker::analyze_window_() {
   this->rms_.store(std::min(1.0f, this->smoothed_rms_ * 5.0f));
 
   // 2. Apply Hann window to sample buffer → FFT buffers
-  // Use static buffers to avoid stack allocation of 512*8 = 4KB
+  // Static buffers to avoid 4 KB stack allocation.
+  // Safe: single AudioVisualizerSpeaker instance, called only from the audio task.
   static float fft_re[FFT_SIZE];
   static float fft_im[FFT_SIZE];
   for (uint32_t i = 0; i < FFT_SIZE; i++) {
