@@ -128,6 +128,12 @@ class SpeakerMediaPlayer : public Component,
   // Processes commands from media_control_command_queue_.
   void watch_media_commands_();
 
+  /// @brief Routes a play command (url or file) to the correct playlist, stopping the pipeline if not enqueuing.
+  void handle_play_item_(MediaCallCommand &cmd);
+
+  /// @brief Dispatches a transport command (play/pause/stop/toggle/mute/volume/repeat/clear).
+  void handle_transport_command_(const MediaCallCommand &cmd);
+
   std::unique_ptr<AudioPipeline> announcement_pipeline_;
   std::unique_ptr<AudioPipeline> media_pipeline_;
   Speaker *media_speaker_{nullptr};

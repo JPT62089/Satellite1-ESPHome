@@ -113,165 +113,175 @@ void SpeakerMediaPlayer::set_playlist_delay_ms(AudioPipelineType pipeline_type, 
   }
 }
 
+void SpeakerMediaPlayer::handle_play_item_(MediaCallCommand &cmd) {
+  bool enqueue = cmd.enqueue.has_value() && cmd.enqueue.value();
+
+  PlaylistItem playlist_item;
+  if (cmd.url.has_value()) {
+    playlist_item.url = *cmd.url.value();
+    delete cmd.url.value();
+  }
+  if (cmd.file.has_value()) {
+    playlist_item.file = cmd.file.value();
+  }
+
+  if (this->single_pipeline_() || (cmd.announce.has_value() && cmd.announce.value())) {
+    if (!enqueue) {
+      // Ensure the loaded next item doesn't start playing, clear the queue, start the file, and unpause
+      this->cancel_timeout("next_ann");
+      this->announcement_playlist_.clear();
+      this->announcement_pipeline_->set_pause_state(false);
+      this->announcement_pipeline_->stop();
+    }
+    this->announcement_playlist_.push_back(playlist_item);
+  } else {
+    if (!enqueue) {
+      // Ensure the loaded next item doesn't start playing, clear the queue, start the file, and unpause
+      this->cancel_timeout("next_media");
+      this->media_playlist_.clear();
+      // If paused, stop the media pipeline and unpause it after confirming its stopped. This avoids playing a
+      // short segment of the paused file before starting the new one.
+      if (this->is_paused_) {
+        this->media_pipeline_->stop();
+        this->set_retry("unpause_med", 50, 3, [this](const uint8_t remaining_attempts) {
+          if (this->media_pipeline_state_ == AudioPipelineState::STOPPED) {
+            this->media_pipeline_->set_pause_state(false);
+            this->is_paused_ = false;
+            return RetryResult::DONE;
+          }
+          return RetryResult::RETRY;
+        });
+      }
+      this->media_pipeline_->stop();
+    }
+    this->media_playlist_.push_back(playlist_item);
+  }
+}
+
+void SpeakerMediaPlayer::handle_transport_command_(const MediaCallCommand &cmd) {
+  if (!cmd.command.has_value())
+    return;
+
+  switch (cmd.command.value()) {
+    case media_player::MEDIA_PLAYER_COMMAND_PLAY:
+      if ((this->media_pipeline_ != nullptr) && (this->is_paused_)) {
+        this->media_pipeline_->set_pause_state(false);
+      }
+      this->is_paused_ = false;
+      break;
+    case media_player::MEDIA_PLAYER_COMMAND_PAUSE:
+    case media_player::MEDIA_PLAYER_COMMAND_STOP:
+      if (this->single_pipeline_() || (cmd.announce.has_value() && cmd.announce.value())) {
+        if (this->announcement_pipeline_ != nullptr) {
+          this->cancel_timeout("next_ann");
+          this->announcement_playlist_.clear();
+          this->announcement_pipeline_->stop();
+          // Pipelines do not stop immediately after calling the stop command, so confirm its stopped before unpausing.
+          // This avoids an audible short segment playing after receiving the stop command in a paused state.
+          this->set_retry("unpause_ann", 50, 3, [this](const uint8_t remaining_attempts) {
+            if (this->announcement_pipeline_state_ == AudioPipelineState::STOPPED) {
+              this->announcement_pipeline_->set_pause_state(false);
+              return RetryResult::DONE;
+            }
+            return RetryResult::RETRY;
+          });
+        }
+      } else {
+        if (this->media_pipeline_ != nullptr) {
+          this->cancel_timeout("next_media");
+          this->media_playlist_.clear();
+          this->media_pipeline_->stop();
+          this->set_retry("unpause_med", 50, 3, [this](const uint8_t remaining_attempts) {
+            if (this->media_pipeline_state_ == AudioPipelineState::STOPPED) {
+              this->media_pipeline_->set_pause_state(false);
+              this->is_paused_ = false;
+              return RetryResult::DONE;
+            }
+            return RetryResult::RETRY;
+          });
+        }
+      }
+      break;
+    case media_player::MEDIA_PLAYER_COMMAND_TOGGLE:
+      if (this->media_pipeline_ != nullptr) {
+        if (this->is_paused_) {
+          this->media_pipeline_->set_pause_state(false);
+          this->is_paused_ = false;
+        } else {
+          this->media_pipeline_->set_pause_state(true);
+          this->is_paused_ = true;
+        }
+      }
+      break;
+    case media_player::MEDIA_PLAYER_COMMAND_MUTE:
+      this->set_mute_state_(true);
+      this->publish_state();
+      break;
+    case media_player::MEDIA_PLAYER_COMMAND_UNMUTE:
+      this->set_mute_state_(false);
+      this->publish_state();
+      break;
+    case media_player::MEDIA_PLAYER_COMMAND_VOLUME_UP:
+      this->set_volume_(std::min(1.0f, this->volume + this->volume_increment_));
+      this->publish_state();
+      break;
+    case media_player::MEDIA_PLAYER_COMMAND_VOLUME_DOWN:
+      this->set_volume_(std::max(0.0f, this->volume - this->volume_increment_));
+      this->publish_state();
+      break;
+    case media_player::MEDIA_PLAYER_COMMAND_REPEAT_ONE:
+      if (this->single_pipeline_() || (cmd.announce.has_value() && cmd.announce.value())) {
+        this->announcement_repeat_one_ = true;
+      } else {
+        this->media_repeat_one_ = true;
+      }
+      break;
+    case media_player::MEDIA_PLAYER_COMMAND_REPEAT_OFF:
+      if (this->single_pipeline_() || (cmd.announce.has_value() && cmd.announce.value())) {
+        this->announcement_repeat_one_ = false;
+      } else {
+        this->media_repeat_one_ = false;
+      }
+      break;
+    case media_player::MEDIA_PLAYER_COMMAND_CLEAR_PLAYLIST:
+      if (this->single_pipeline_() || (cmd.announce.has_value() && cmd.announce.value())) {
+        if (this->announcement_playlist_.empty()) {
+          this->announcement_playlist_.resize(1);
+        }
+      } else {
+        if (this->media_playlist_.empty()) {
+          this->media_playlist_.resize(1);
+        }
+      }
+      break;
+    default:
+      break;
+  }
+}
+
 void SpeakerMediaPlayer::watch_media_commands_() {
   if (!this->is_ready()) {
     return;
   }
 
   MediaCallCommand media_command;
+  if (xQueueReceive(this->media_control_command_queue_, &media_command, 0) != pdTRUE) {
+    return;
+  }
 
-  if (xQueueReceive(this->media_control_command_queue_, &media_command, 0) == pdTRUE) {
-    bool enqueue = media_command.enqueue.has_value() && media_command.enqueue.value();
+  if (media_command.url.has_value() || media_command.file.has_value()) {
+    this->handle_play_item_(media_command);
+    return;
+  }
 
-    if (media_command.url.has_value() || media_command.file.has_value()) {
-      PlaylistItem playlist_item;
-      if (media_command.url.has_value()) {
-        playlist_item.url = *media_command.url.value();
-        delete media_command.url.value();
-      }
-      if (media_command.file.has_value()) {
-        playlist_item.file = media_command.file.value();
-      }
+  if (media_command.volume.has_value()) {
+    this->set_volume_(media_command.volume.value());
+    this->publish_state();
+    return;
+  }
 
-      if (this->single_pipeline_() || (media_command.announce.has_value() && media_command.announce.value())) {
-        if (!enqueue) {
-          // Ensure the loaded next item doesn't start playing, clear the queue, start the file, and unpause
-          this->cancel_timeout("next_ann");
-          this->announcement_playlist_.clear();
-          this->announcement_pipeline_->set_pause_state(false);
-          this->announcement_pipeline_->stop();
-        }
-        this->announcement_playlist_.push_back(playlist_item);
-      } else {
-        if (!enqueue) {
-          // Ensure the loaded next item doesn't start playing, clear the queue, start the file, and unpause
-          this->cancel_timeout("next_media");
-          this->media_playlist_.clear();
-          if (this->is_paused_) {
-            // If paused, stop the media pipeline and unpause it after confirming its stopped. This avoids playing a
-            // short segment of the paused file before starting the new one.
-            this->media_pipeline_->stop();
-            this->set_retry("unpause_med", 50, 3, [this](const uint8_t remaining_attempts) {
-              if (this->media_pipeline_state_ == AudioPipelineState::STOPPED) {
-                this->media_pipeline_->set_pause_state(false);
-                this->is_paused_ = false;
-                return RetryResult::DONE;
-              }
-              return RetryResult::RETRY;
-            });
-          }
-          this->media_pipeline_->stop();
-        }
-        this->media_playlist_.push_back(playlist_item);
-      }
-      return;  // Don't process the new file play command further
-    }
-
-    if (media_command.volume.has_value()) {
-      this->set_volume_(media_command.volume.value());
-      this->publish_state();
-    }
-
-    if (media_command.command.has_value()) {
-      switch (media_command.command.value()) {
-        case media_player::MEDIA_PLAYER_COMMAND_PLAY:
-          if ((this->media_pipeline_ != nullptr) && (this->is_paused_)) {
-            this->media_pipeline_->set_pause_state(false);
-          }
-          this->is_paused_ = false;
-          break;
-        case media_player::MEDIA_PLAYER_COMMAND_PAUSE:
-        case media_player::MEDIA_PLAYER_COMMAND_STOP:
-          // Pipelines do not stop immediately after calling the stop command, so confirm its stopped before unpausing.
-          // This avoids an audible short segment playing after receiving the stop command in a paused state.
-          if (this->single_pipeline_() || (media_command.announce.has_value() && media_command.announce.value())) {
-            if (this->announcement_pipeline_ != nullptr) {
-              this->cancel_timeout("next_ann");
-              this->announcement_playlist_.clear();
-              this->announcement_pipeline_->stop();
-              this->set_retry("unpause_ann", 50, 3, [this](const uint8_t remaining_attempts) {
-                if (this->announcement_pipeline_state_ == AudioPipelineState::STOPPED) {
-                  this->announcement_pipeline_->set_pause_state(false);
-                  return RetryResult::DONE;
-                }
-                return RetryResult::RETRY;
-              });
-            }
-          } else {
-            if (this->media_pipeline_ != nullptr) {
-              this->cancel_timeout("next_media");
-              this->media_playlist_.clear();
-              this->media_pipeline_->stop();
-              this->set_retry("unpause_med", 50, 3, [this](const uint8_t remaining_attempts) {
-                if (this->media_pipeline_state_ == AudioPipelineState::STOPPED) {
-                  this->media_pipeline_->set_pause_state(false);
-                  this->is_paused_ = false;
-                  return RetryResult::DONE;
-                }
-                return RetryResult::RETRY;
-              });
-            }
-          }
-
-          break;
-        case media_player::MEDIA_PLAYER_COMMAND_TOGGLE:
-          if (this->media_pipeline_ != nullptr) {
-            if (this->is_paused_) {
-              this->media_pipeline_->set_pause_state(false);
-              this->is_paused_ = false;
-            } else {
-              this->media_pipeline_->set_pause_state(true);
-              this->is_paused_ = true;
-            }
-          }
-          break;
-        case media_player::MEDIA_PLAYER_COMMAND_MUTE: {
-          this->set_mute_state_(true);
-
-          this->publish_state();
-          break;
-        }
-        case media_player::MEDIA_PLAYER_COMMAND_UNMUTE:
-          this->set_mute_state_(false);
-          this->publish_state();
-          break;
-        case media_player::MEDIA_PLAYER_COMMAND_VOLUME_UP:
-          this->set_volume_(std::min(1.0f, this->volume + this->volume_increment_));
-          this->publish_state();
-          break;
-        case media_player::MEDIA_PLAYER_COMMAND_VOLUME_DOWN:
-          this->set_volume_(std::max(0.0f, this->volume - this->volume_increment_));
-          this->publish_state();
-          break;
-        case media_player::MEDIA_PLAYER_COMMAND_REPEAT_ONE:
-          if (this->single_pipeline_() || (media_command.announce.has_value() && media_command.announce.value())) {
-            this->announcement_repeat_one_ = true;
-          } else {
-            this->media_repeat_one_ = true;
-          }
-          break;
-        case media_player::MEDIA_PLAYER_COMMAND_REPEAT_OFF:
-          if (this->single_pipeline_() || (media_command.announce.has_value() && media_command.announce.value())) {
-            this->announcement_repeat_one_ = false;
-          } else {
-            this->media_repeat_one_ = false;
-          }
-          break;
-        case media_player::MEDIA_PLAYER_COMMAND_CLEAR_PLAYLIST:
-          if (this->single_pipeline_() || (media_command.announce.has_value() && media_command.announce.value())) {
-            if (this->announcement_playlist_.empty()) {
-              this->announcement_playlist_.resize(1);
-            }
-          } else {
-            if (this->media_playlist_.empty()) {
-              this->media_playlist_.resize(1);
-            }
-          }
-          break;
-        default:
-          break;
-      }
-    }
+  if (media_command.command.has_value()) {
+    this->handle_transport_command_(media_command);
   }
 }
 
