@@ -87,6 +87,9 @@ jobs:
         run: |
           file=config/satellite1.yaml
           tag="${{ needs.prepare.outputs.version }}"
+          # Python must be flush-left (no indentation) to avoid IndentationError inside -c.
+          # tag is passed via sys.argv (not interpolated) to prevent injection; the lambda
+          # replacement avoids re.sub treating tag as a backreference pattern.
           python3 -c "
 import re, sys
 tag, path = sys.argv[1], sys.argv[2]
