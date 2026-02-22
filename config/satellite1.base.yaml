@@ -83,6 +83,7 @@ packages:
   va: !include common/voice_assistant.yaml
   timer: !include common/timer.yaml
   led_ring: !include common/led_ring.yaml
+  visualizer: !include common/audio_visualizer.yaml
 
   ## OPTIONAL COMPONENTS
   # mmwave_ld2410: !include common/mmwave_ld2410.yaml
