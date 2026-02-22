@@ -26,6 +26,9 @@ class AudioVisualizerSpeaker : public Component, public speaker::Speaker {
   size_t play(const uint8_t *data, size_t length, TickType_t ticks_to_wait, bool write_partial = false) override {
     return this->play(data, length);
   }
+  size_t play_silence(size_t length_ms) override {
+    return this->output_speaker_ ? this->output_speaker_->play_silence(length_ms) : 0;
+  }
 
   void start() override;
   void stop() override;
@@ -56,7 +59,7 @@ class AudioVisualizerSpeaker : public Component, public speaker::Speaker {
   speaker::Speaker *output_speaker_{nullptr};
 
   // Sample accumulation (mono, float)
-  float sample_window_[FFT_SIZE];
+  float sample_window_[FFT_SIZE]{};
   uint32_t sample_count_{0};
 
   // Published analysis results

@@ -14,6 +14,11 @@ static const char *const TAG = "audio_visualizer";
 
 void AudioVisualizerSpeaker::setup() {
   this->bands_mutex_ = xSemaphoreCreateMutex();
+  if (this->bands_mutex_ == nullptr) {
+    ESP_LOGE(TAG, "Failed to create bands mutex");
+    this->mark_failed();
+    return;
+  }
 
   // Precompute logarithmic band bin ranges (60 Hz – 16 kHz over NUM_BANDS bands)
   const float f_low = 60.0f;
@@ -44,8 +49,10 @@ size_t AudioVisualizerSpeaker::play(const uint8_t *data, size_t length) {
 
 void AudioVisualizerSpeaker::start() {
   this->state_ = speaker::STATE_STARTING;
-  if (this->output_speaker_)
+  if (this->output_speaker_) {
+    this->output_speaker_->set_audio_stream_info(this->audio_stream_info_);
     this->output_speaker_->start();
+  }
   this->state_ = speaker::STATE_RUNNING;
 }
 
