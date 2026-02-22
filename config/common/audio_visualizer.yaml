@@ -2,7 +2,6 @@ speaker:
   - platform: audio_visualizer
     id: audio_viz
     output_speaker: media_mixing_input
-    light: voice_assistant_leds
     bits_per_sample: 16
     num_channels: 2
     sample_rate: 48000
