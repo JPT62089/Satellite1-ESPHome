@@ -113,120 +113,127 @@ void AudioPipeline::resume_tasks() {
   }
 }
 
-AudioPipelineState AudioPipeline::process_state() {
-  /*
-   * Log items from info error queue
-   */
+void AudioPipeline::drain_info_queue_() {
+  if (this->info_error_queue_ == nullptr)
+    return;
   InfoErrorEvent event;
-  if (this->info_error_queue_ != nullptr) {
-    while (xQueueReceive(this->info_error_queue_, &event, 0)) {
-      switch (event.source) {
-        case InfoErrorSource::READER:
-          if (event.err.has_value()) {
-            ESP_LOGE(TAG, "Media reader encountered an error: %s", esp_err_to_name(event.err.value()));
-          } else if (event.file_type.has_value()) {
-            ESP_LOGD(TAG, "Reading %s file type", audio_file_type_to_string(event.file_type.value()));
+  while (xQueueReceive(this->info_error_queue_, &event, 0)) {
+    switch (event.source) {
+      case InfoErrorSource::READER:
+        if (event.err.has_value()) {
+          ESP_LOGE(TAG, "Media reader encountered an error: %s", esp_err_to_name(event.err.value()));
+        } else if (event.file_type.has_value()) {
+          ESP_LOGD(TAG, "Reading %s file type", audio_file_type_to_string(event.file_type.value()));
+        }
+        break;
+      case InfoErrorSource::DECODER:
+        if (event.err.has_value()) {
+          ESP_LOGE(TAG, "Decoder encountered an error: %s", esp_err_to_name(event.err.value()));
+        }
+        if (event.audio_stream_info.has_value()) {
+          ESP_LOGD(TAG, "Decoded audio has %d channels, %" PRId32 " Hz sample rate, and %d bits per sample",
+                   event.audio_stream_info.value().get_channels(), event.audio_stream_info.value().get_sample_rate(),
+                   event.audio_stream_info.value().get_bits_per_sample());
+        }
+        if (event.decoding_err.has_value()) {
+          switch (event.decoding_err.value()) {
+            case DecodingError::FAILED_HEADER:
+              ESP_LOGE(TAG, "Failed to parse the file's header.");
+              break;
+            case DecodingError::INCOMPATIBLE_BITS_PER_SAMPLE:
+              ESP_LOGE(TAG, "Incompatible bits per sample. Only 16 bits per sample is supported");
+              break;
+            case DecodingError::INCOMPATIBLE_CHANNELS:
+              ESP_LOGE(TAG, "Incompatible number of channels. Only 1 or 2 channel audio is supported.");
+              break;
           }
-
-          break;
-        case InfoErrorSource::DECODER:
-          if (event.err.has_value()) {
-            ESP_LOGE(TAG, "Decoder encountered an error: %s", esp_err_to_name(event.err.value()));
-          }
-
-          if (event.audio_stream_info.has_value()) {
-            ESP_LOGD(TAG, "Decoded audio has %d channels, %" PRId32 " Hz sample rate, and %d bits per sample",
-                     event.audio_stream_info.value().get_channels(), event.audio_stream_info.value().get_sample_rate(),
-                     event.audio_stream_info.value().get_bits_per_sample());
-          }
-
-          if (event.decoding_err.has_value()) {
-            switch (event.decoding_err.value()) {
-              case DecodingError::FAILED_HEADER:
-                ESP_LOGE(TAG, "Failed to parse the file's header.");
-                break;
-              case DecodingError::INCOMPATIBLE_BITS_PER_SAMPLE:
-                ESP_LOGE(TAG, "Incompatible bits per sample. Only 16 bits per sample is supported");
-                break;
-              case DecodingError::INCOMPATIBLE_CHANNELS:
-                ESP_LOGE(TAG, "Incompatible number of channels. Only 1 or 2 channel audio is supported.");
-                break;
-            }
-          }
-          break;
-      }
+        }
+        break;
     }
   }
+}
 
-  /*
-   * Determine the current state based on the event group bits and tasks' status
-   */
-
-  if (this->pending_source_.has_value()) {
-    // Init command pending
-    EventBits_t event_bits = xEventGroupGetBits(this->event_group_);
-    if (!(event_bits & EventGroupBits::PIPELINE_COMMAND_STOP) && !this->is_playing_) {
-      // Only start if there is no pending stop command
-      if ((this->read_task_handle_ == nullptr) || (this->decode_task_handle_ == nullptr)) {
-        // At least one task isn't running
-        this->start_tasks_();
-      }
-
-      this->current_source_ = this->pending_source_;
-      this->pending_source_.reset();
-      this->playback_ms_ = 0;
-      xEventGroupSetBits(this->event_group_, EventGroupBits::READER_COMMAND_INIT);
-
-      this->is_playing_ = true;
-      this->hard_stop_ = false;
-      return AudioPipelineState::PLAYING;
-    }
-  }
+bool AudioPipeline::try_start_pending_() {
+  if (!this->pending_source_.has_value())
+    return false;
 
   EventBits_t event_bits = xEventGroupGetBits(this->event_group_);
+  if ((event_bits & EventGroupBits::PIPELINE_COMMAND_STOP) || this->is_playing_)
+    return false;
 
-  if ((event_bits & EventGroupBits::READER_MESSAGE_ERROR)) {
+  if ((this->read_task_handle_ == nullptr) || (this->decode_task_handle_ == nullptr)) {
+    this->start_tasks_();
+  }
+
+  this->current_source_ = this->pending_source_;
+  this->pending_source_.reset();
+  this->playback_ms_ = 0;
+  xEventGroupSetBits(this->event_group_, EventGroupBits::READER_COMMAND_INIT);
+  this->is_playing_ = true;
+  this->hard_stop_ = false;
+  return true;
+}
+
+AudioPipelineState AudioPipeline::check_errors_() {
+  EventBits_t event_bits = xEventGroupGetBits(this->event_group_);
+  if (event_bits & EventGroupBits::READER_MESSAGE_ERROR) {
     xEventGroupClearBits(this->event_group_, EventGroupBits::READER_MESSAGE_ERROR);
     return AudioPipelineState::ERROR_READING;
   }
-
-  if ((event_bits & EventGroupBits::DECODER_MESSAGE_ERROR)) {
+  if (event_bits & EventGroupBits::DECODER_MESSAGE_ERROR) {
     xEventGroupClearBits(this->event_group_, EventGroupBits::DECODER_MESSAGE_ERROR);
     return AudioPipelineState::ERROR_DECODING;
   }
+  return AudioPipelineState::PLAYING;
+}
+
+bool AudioPipeline::check_completion_() {
+  EventBits_t event_bits = xEventGroupGetBits(this->event_group_);
+
+  if (!((event_bits & EventGroupBits::READER_MESSAGE_FINISHED) &&
+        !(event_bits & EventGroupBits::READER_MESSAGE_LOADED_MEDIA_TYPE) &&
+        (event_bits & EventGroupBits::DECODER_MESSAGE_FINISHED))) {
+    return false;
+  }
+
+  if (event_bits & EventGroupBits::PIPELINE_COMMAND_STOP) {
+    this->hard_stop_ = true;
+  }
+
+  if ((this->read_task_handle_ != nullptr) || (this->decode_task_handle_ != nullptr)) {
+    if (this->speaker_ != nullptr && !this->speaker_->is_stopped()) {
+      if (this->hard_stop_) {
+        this->speaker_->stop();
+        this->hard_stop_ = false;
+      } else {
+        this->speaker_->finish();
+      }
+    } else {
+      this->delete_tasks_();
+    }
+  }
+  return true;
+}
+
+AudioPipelineState AudioPipeline::process_state() {
+  this->drain_info_queue_();
+
+  if (this->try_start_pending_())
+    return AudioPipelineState::PLAYING;
+
+  AudioPipelineState err_state = this->check_errors_();
+  if (err_state != AudioPipelineState::PLAYING)
+    return err_state;
+
+  if (this->check_completion_())
+    return AudioPipelineState::STOPPING;
+
+  EventBits_t event_bits = xEventGroupGetBits(this->event_group_);
 
   if ((this->read_task_handle_ == nullptr) && (this->decode_task_handle_ == nullptr)) {
     xEventGroupClearBits(this->event_group_, EventGroupBits::PIPELINE_COMMAND_STOP);
     this->is_playing_ = false;
-
     return AudioPipelineState::STOPPED;
-  }
-
-  if ((event_bits & EventGroupBits::READER_MESSAGE_FINISHED) &&
-      (!(event_bits & EventGroupBits::READER_MESSAGE_LOADED_MEDIA_TYPE) &&
-       (event_bits & EventGroupBits::DECODER_MESSAGE_FINISHED))) {
-    // Tasks are finished and there's no media in between the reader and decoder
-
-    if (event_bits & EventGroupBits::PIPELINE_COMMAND_STOP) {
-      // if stop was requested, stop immediately, if reader/decoder have finished, wait for speaker to finish
-      this->hard_stop_ = true;
-    }
-
-    if ((this->read_task_handle_ != nullptr) || (this->decode_task_handle_ != nullptr)) {
-      if (this->speaker_ != nullptr && !this->speaker_->is_stopped()) {
-        if (this->hard_stop_) {
-          // Stop command was sent, so immediately end of the playback
-          this->speaker_->stop();
-          this->hard_stop_ = false;
-        } else {
-          // Decoded all the audio, so let the speaker finish playing before stopping
-          this->speaker_->finish();
-        }
-      } else {
-        this->delete_tasks_();
-      }
-    }
-    return AudioPipelineState::STOPPING;
   }
 
   if (event_bits & EventGroupBits::PIPELINE_COMMAND_STOP) {
