@@ -502,6 +502,14 @@ light:
                 }
               }
               index = (index + 1);
+      - visualizer_spectrum:
+          name: "Visualizer Spectrum"
+      - visualizer_pulse:
+          name: "Visualizer Pulse"
+      - visualizer_vu_sweep:
+          name: "Visualizer VU Sweep"
+      - visualizer_waveform:
+          name: "Visualizer Waveform"
 
 script:
   # Master script controlling the LEDs, based on different conditions : initialization in progress, wifi and api connected and voice assistant phase.
