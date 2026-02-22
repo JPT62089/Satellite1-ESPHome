@@ -83,6 +83,10 @@ class AudioVisualizerSpeaker : public Component, public speaker::Speaker {
   // Band bin ranges precomputed in setup()
   uint16_t band_bin_start_[NUM_BANDS]{};
   uint16_t band_bin_end_[NUM_BANDS]{};
+
+  // Diagnostic logging state
+  uint32_t window_count_{0};
+  bool first_data_logged_{false};
 };
 
 }  // namespace audio_visualizer

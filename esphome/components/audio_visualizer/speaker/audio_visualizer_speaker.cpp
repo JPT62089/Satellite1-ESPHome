@@ -35,28 +35,38 @@ void AudioVisualizerSpeaker::setup() {
 }
 
 size_t AudioVisualizerSpeaker::play(const uint8_t *data, size_t length) {
+  if (!this->first_data_logged_) {
+    this->first_data_logged_ = true;
+    ESP_LOGI(TAG, "First audio data received (%u bytes)", (unsigned) length);
+  }
+
   // Forward first — audio path is never blocked by analysis
   size_t written = 0;
   if (this->output_speaker_) {
     written = this->output_speaker_->play(data, length);
   }
-  // Accumulate for analysis (16-bit stereo → mono)
+  // Accumulate only samples that were actually forwarded to avoid double-counting on retry.
+  // When no output speaker is connected, use the full length so visualizer works standalone.
   const auto *samples = reinterpret_cast<const int16_t *>(data);
-  size_t num_frames = length / 4;  // 2 ch × 2 bytes
+  size_t bytes_consumed = this->output_speaker_ ? written : length;
+  size_t num_frames = bytes_consumed / 4;  // 2 ch × 2 bytes
   this->accumulate_samples_(samples, num_frames);
   return written;
 }
 
 void AudioVisualizerSpeaker::start() {
+  ESP_LOGD(TAG, "Starting visualizer pipeline");
   this->state_ = speaker::STATE_STARTING;
   if (this->output_speaker_) {
     this->output_speaker_->set_audio_stream_info(this->audio_stream_info_);
     this->output_speaker_->start();
   }
   this->state_ = speaker::STATE_RUNNING;
+  this->first_data_logged_ = false;
 }
 
 void AudioVisualizerSpeaker::stop() {
+  ESP_LOGD(TAG, "Stopping visualizer pipeline (windows analyzed: %u)", (unsigned) this->window_count_);
   this->state_ = speaker::STATE_STOPPING;
   if (this->output_speaker_)
     this->output_speaker_->stop();
@@ -70,6 +80,7 @@ void AudioVisualizerSpeaker::stop() {
   memset(this->bands_, 0, sizeof(this->bands_));
   memset(this->bass_history_, 0, sizeof(this->bass_history_));
   this->bass_history_idx_ = 0;
+  this->window_count_ = 0;
 }
 
 void AudioVisualizerSpeaker::finish() {
@@ -218,7 +229,19 @@ void AudioVisualizerSpeaker::analyze_window_() {
     xSemaphoreGive(this->bands_mutex_);
   }
 
-  // 6. Beat detection: bass band vs rolling average
+  // 6. Throttled diagnostic logging (~every 5 seconds)
+  this->window_count_++;
+  if (this->window_count_ % 450 == 1) {
+    float top_band = 0.0f;
+    for (uint32_t b = 0; b < NUM_BANDS; b++) {
+      if (this->smoothed_bands_[b] > top_band)
+        top_band = this->smoothed_bands_[b];
+    }
+    ESP_LOGD(TAG, "Analysis: rms=%.4f top_band=%.4f windows=%u", this->smoothed_rms_, top_band,
+             (unsigned) this->window_count_);
+  }
+
+  // 7. Beat detection: bass band vs rolling average
   float bass_energy = (this->smoothed_bands_[0] + this->smoothed_bands_[1]) * 0.5f;
   this->bass_history_[this->bass_history_idx_] = bass_energy;
   this->bass_history_idx_ = (this->bass_history_idx_ + 1) % BEAT_HISTORY_LEN;
