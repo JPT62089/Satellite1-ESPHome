@@ -40,7 +40,7 @@ switch:
     turn_on_action:
       - if:
           condition:
-            binary_sensor.is_off: btn_left
+            lambda: return !id(btn_left).is_pressed();
           then:
             - switch.template.publish:
                 id: master_mute_switch
@@ -48,7 +48,7 @@ switch:
     turn_off_action:
       - if:
           condition:
-            binary_sensor.is_off: btn_left
+            lambda: return !id(btn_left).is_pressed();
           then:
             - switch.template.publish:
                 id: master_mute_switch
