@@ -55,7 +55,7 @@ esphome:
     version: ${esp32_fw_version}
 
 esp32_improv:
-  authorizer: none  # btn_action is now Satellite1Button, not binary_sensor; TODO: re-add authorization
+  authorizer: btn_action_binary
   on_start:
     - lambda: id(improv_ble_in_progress) = true;
     - script.execute: control_leds

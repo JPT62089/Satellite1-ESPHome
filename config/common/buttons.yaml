@@ -18,6 +18,13 @@ globals:
     restore_value: no
     initial_value: 'false'
 
+binary_sensor:
+  # Proxy for btn_action so esp32_improv can use it as an authorizer
+  # (esp32_improv requires a binary_sensor, not a Satellite1Button).
+  - platform: template
+    id: btn_action_binary
+    lambda: return id(btn_action).is_pressed();
+
 event:
   - platform: template
     id: action_button_press_event
