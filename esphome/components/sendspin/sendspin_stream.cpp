@@ -208,7 +208,8 @@ void SendspinStream::handle_binary_frame_(const uint8_t *data, size_t len) {
 
   // Skip chunks that are already in the past
   if (stamp < audio::tv_t::now()) {
-    ESP_LOGV(TAG, "Dropping stale audio chunk (%" PRId64 " us behind)", audio::tv_t::now().to_microseconds() - local_ts_us);
+    ESP_LOGV(TAG, "Dropping stale audio chunk (%" PRId64 " us behind)",
+             audio::tv_t::now().to_microseconds() - local_ts_us);
     return;
   }
 

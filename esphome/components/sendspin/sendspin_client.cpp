@@ -14,7 +14,8 @@ namespace sendspin {
 static const char *const TAG = "sendspin_client";
 
 void SendspinClient::setup() {
-  this->stream_.set_on_state_change([this](SendspinStreamState state) { this->on_stream_state_changed_(state); });
+  this->stream_.set_on_state_change(
+      [this](SendspinStreamState state) { this->defer([this, state]() { this->on_stream_state_changed_(state); }); });
 }
 
 void SendspinClient::loop() {
