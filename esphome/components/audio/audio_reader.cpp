@@ -18,7 +18,7 @@ static const uint32_t READ_WRITE_TIMEOUT_MS = 15;
 static const uint32_t CONNECTION_TIMEOUT_MS = 5000;
 
 // The number of times the http read times out with no data before throwing an error
-static const uint8_t MAX_FETCHING_HEADER_ATTEMPTS = 6;
+static const uint8_t MAX_FETCHING_HEADER_ATTEMPTS = 3;
 static const size_t HTTP_STREAM_BUFFER_SIZE = 1440 * 4;
 
 static const uint8_t MAX_REDIRECTIONS = 5;
