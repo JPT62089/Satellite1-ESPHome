@@ -1,0 +1,122 @@
+substitutions:
+  friendly_name: "Satellite1 Sendspin Testing"
+  node_name: sat1-sendspin-testing
+
+esphome:
+  name: ${node_name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.1.0
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: ESP32S3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+wifi:
+  ssid: "test-ssid"
+  password: "test-password"
+
+logger:
+  level: DEBUG
+
+api:
+
+http_request:
+
+external_components:
+  - source:
+      type: local
+      path: ../../../esphome/components
+    components:
+      - audio
+      - i2s_audio
+      - mixer
+      - resampler
+      - sendspin
+      - snapcast
+      - speaker
+
+i2s_audio:
+  - id: i2s_shared
+    i2s_lrclk_pin: GPIO3
+    i2s_bclk_pin: GPIO2
+    i2s_mclk_pin: GPIO16
+
+speaker:
+  - platform: i2s_audio
+    id: i2s_audio_speaker
+    sample_rate: 48000
+    i2s_dout_pin: GPIO9
+    bits_per_sample: 32bit
+    i2s_audio_id: i2s_shared
+    dac_type: external
+    channel: stereo
+    timeout: never
+
+  - platform: mixer
+    id: mixing_speaker
+    output_speaker: i2s_audio_speaker
+    num_channels: 2
+    source_speakers:
+      - id: announcement_mixing_input
+        timeout: never
+      - id: media_mixing_input
+        timeout: never
+
+  - platform: resampler
+    id: announcement_resampling_speaker
+    output_speaker: announcement_mixing_input
+    sample_rate: 48000
+    bits_per_sample: 16
+
+  - platform: resampler
+    id: media_resampling_speaker
+    output_speaker: media_mixing_input
+    sample_rate: 48000
+    bits_per_sample: 16
+
+sendspin:
+  id: sendspin_client
+
+snapcast:
+  id: snapcast_client
+
+media_player:
+  - platform: speaker
+    id: external_media_player
+    name: "Sat1 Sendspin Test Media Player"
+    internal: false
+    volume_increment: 0.05
+    volume_min: 0.1
+    volume_max: 1.0
+    sendspin: sendspin_client
+    snapcast: snapcast_client
+    announcement_pipeline:
+      speaker: announcement_resampling_speaker
+      format: FLAC
+      num_channels: 1
+      sample_rate: 48000
+    media_pipeline:
+      speaker: media_resampling_speaker
+      format: FLAC
+      num_channels: 2
+      sample_rate: 48000
+
+switch:
+  - platform: template
+    id: sendspin_switch
+    name: "Sendspin"
+    icon: "mdi:music-circle"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    on_turn_on:
+      - sendspin.enable:
+    on_turn_off:
+      - sendspin.disable:
