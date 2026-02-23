@@ -16,6 +16,7 @@ static const char *const TAG = "sendspin_client";
 void SendspinClient::setup() {
   this->stream_.set_on_state_change(
       [this](SendspinStreamState state) { this->defer([this, state]() { this->on_stream_state_changed_(state); }); });
+  this->stream_.set_on_clock_synced([this]() { this->clock_synced_ = true; });
 }
 
 void SendspinClient::loop() {
@@ -65,7 +66,6 @@ void SendspinClient::do_clock_sync_() {
   int64_t now_us = esp_timer_get_time();
   this->stream_.send_text(build_client_time(now_us));
   this->last_clock_sync_ms_ = millis();
-  this->clock_synced_ = true;
 }
 
 void SendspinClient::on_stream_state_changed_(SendspinStreamState state) {

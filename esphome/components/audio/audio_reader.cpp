@@ -410,7 +410,7 @@ AudioReaderState AudioReader::snapcast_read_() {
 #if USE_SENDSPIN
 AudioReaderState AudioReader::sendspin_read_() {
   uint32_t state_value = 0;
-  if (xTaskNotifyWait(0, 0, &state_value, pdMS_TO_TICKS(500)) == pdTRUE) {
+  if (xTaskNotifyWait(0, 0xFFFFFFFF, &state_value, pdMS_TO_TICKS(500)) == pdTRUE) {
     if (!this->sendspin_stream_->is_streaming()) {
       this->sendspin_stream_ = nullptr;
       return AudioReaderState::FINISHED;

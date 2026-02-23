@@ -50,8 +50,14 @@ class SendspinStream {
   bool is_streaming() const { return state_.load(std::memory_order_relaxed) == SendspinStreamState::STREAMING; }
   bool is_idle() const { return state_.load(std::memory_order_relaxed) == SendspinStreamState::IDLE; }
 
-  /// Set callback invoked (on main task via defer) when state changes
+  /// Set callback invoked (on main task via defer) when state changes.
+  /// IMPORTANT: must only be called once (from setup()), before the WS server starts.
+  /// The callback is read from the httpd task without synchronization.
   void set_on_state_change(std::function<void(SendspinStreamState)> cb) { this->on_state_change_ = std::move(cb); }
+
+  /// Set callback invoked from the httpd task each time a clock-sync round-trip completes.
+  /// Callers must ensure the callback is safe to invoke from any FreeRTOS task.
+  void set_on_clock_synced(std::function<void()> cb) { this->on_clock_synced_ = std::move(cb); }
 
   /// Convert a server-clock microsecond timestamp to local esp_timer_get_time() microseconds
   int64_t server_to_local_us(int64_t server_us) const {
@@ -86,6 +92,7 @@ class SendspinStream {
   TaskHandle_t notification_target_{nullptr};
 
   std::function<void(SendspinStreamState)> on_state_change_;
+  std::function<void()> on_clock_synced_;
 };
 
 }  // namespace sendspin

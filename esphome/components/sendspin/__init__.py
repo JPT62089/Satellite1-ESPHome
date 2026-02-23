@@ -4,7 +4,7 @@ from esphome import automation
 from esphome.components import esp32
 from esphome.const import CONF_ID, CONF_PORT
 
-DEPENDENCIES = ["network", "audio"]
+DEPENDENCIES = ["network", "audio", "mdns"]
 CODEOWNERS = ["@FutureProofHomes"]
 
 sendspin_ns = cg.esphome_ns.namespace("sendspin")

@@ -104,6 +104,8 @@ void SendspinStream::update_clock_offset(int64_t client_transmitted, int64_t ser
   int64_t offset = ((server_received - client_transmitted) + (server_transmitted - client_received)) / 2;
   this->clock_offset_us_.store(offset, std::memory_order_relaxed);
   ESP_LOGV(TAG, "Clock offset updated: %" PRId64 " us", offset);
+  if (this->on_clock_synced_)
+    this->on_clock_synced_();
 }
 
 // Static WebSocket handler — called by esp_http_server for each frame
