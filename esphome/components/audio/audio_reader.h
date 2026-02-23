@@ -10,6 +10,12 @@
 #include "esphome/components/snapcast/snapcast_stream.h"
 #endif
 
+#if USE_SENDSPIN
+namespace sendspin {
+class SendspinStream;
+}  // namespace sendspin
+#endif
+
 #include "esp_err.h"
 
 #include <esp_http_client.h>
@@ -57,6 +63,10 @@ class AudioReader {
   esp_err_t start(snapcast::SnapcastStream *stream, AudioFileType &file_type);
 #endif
 
+#if USE_SENDSPIN
+  esp_err_t start(sendspin::SendspinStream *stream, AudioFileType &file_type);
+#endif
+
   /// @brief Reads new file data from the source and sends to the ring buffer sink.
   /// @return AudioReaderState
   AudioReaderState read();
@@ -77,6 +87,9 @@ class AudioReader {
 #if USE_SNAPCAST
   AudioReaderState snapcast_read_();
 #endif
+#if USE_SENDSPIN
+  AudioReaderState sendspin_read_();
+#endif
 
   std::weak_ptr<TimedRingBuffer> output_ring_buffer_;
   timed_chunk_t *current_timed_chunk_{nullptr};
@@ -94,6 +107,9 @@ class AudioReader {
 
 #if USE_SNAPCAST
   snapcast::SnapcastStream *snapcast_stream_{nullptr};
+#endif
+#if USE_SENDSPIN
+  sendspin::SendspinStream *sendspin_stream_{nullptr};
 #endif
 };
 }  // namespace audio

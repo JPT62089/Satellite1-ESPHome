@@ -31,6 +31,11 @@ namespace snapcast {
 class SnapcastClient;
 }  // namespace snapcast
 #endif
+#if USE_SENDSPIN
+namespace sendspin {
+class SendspinClient;
+}  // namespace sendspin
+#endif
 namespace speaker {
 
 struct MediaCallCommand {
@@ -95,6 +100,9 @@ class SpeakerMediaPlayer : public Component,
     this->snapcast_client_ = snapcast_client;
   }
 #endif
+#if USE_SENDSPIN
+  void set_sendspin_client(sendspin::SendspinClient *client) { this->sendspin_client_ = client; }
+#endif
 
   Trigger<> *get_mute_trigger() const { return this->mute_trigger_.get(); }
   Trigger<> *get_unmute_trigger() const { return this->unmute_trigger_.get(); }
@@ -103,6 +111,9 @@ class SpeakerMediaPlayer : public Component,
   void play_file(audio::AudioFile *media_file, bool announcement, bool enqueue);
 #if USE_SNAPCAST
   void play_snapcast_stream(const std::string &server_uri);
+#endif
+#if USE_SENDSPIN
+  void play_sendspin_stream();
 #endif
   void set_playlist_delay_ms(AudioPipelineType pipeline_type, uint32_t delay_ms);
 
@@ -140,6 +151,9 @@ class SpeakerMediaPlayer : public Component,
   Speaker *announcement_speaker_{nullptr};
 #if USE_SNAPCAST
   snapcast::SnapcastClient *snapcast_client_{nullptr};
+#endif
+#if USE_SENDSPIN
+  sendspin::SendspinClient *sendspin_client_{nullptr};
 #endif
   optional<media_player::MediaPlayerSupportedFormat> media_format_;
   AudioPipelineState media_pipeline_state_{AudioPipelineState::STOPPED};

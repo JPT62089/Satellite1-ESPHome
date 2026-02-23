@@ -20,6 +20,11 @@ namespace snapcast {
 class SnapcastStream;
 }
 #endif
+#if USE_SENDSPIN
+namespace sendspin {
+class SendspinStream;
+}  // namespace sendspin
+#endif
 namespace speaker {
 
 // Internal sink/source buffers for reader and decoder
@@ -36,6 +41,9 @@ enum class PipelineSourceType : uint8_t {
 #if USE_SNAPCAST
   SNAPCAST,
 #endif
+#if USE_SENDSPIN
+  SENDSPIN,
+#endif
 };
 
 struct PipelineSource {
@@ -44,6 +52,9 @@ struct PipelineSource {
   audio::AudioFile *audio_file{nullptr};
 #if USE_SNAPCAST
   snapcast::SnapcastStream *snapcast_stream{nullptr};
+#endif
+#if USE_SENDSPIN
+  sendspin::SendspinStream *sendspin_stream{nullptr};
 #endif
 };
 
@@ -103,6 +114,9 @@ class AudioPipeline {
   /// @param stream Pointer to a snapcast stream
   /// @return ESP_OK if successful or an appropriate error if not
   void start_snapcast(snapcast::SnapcastStream *stream);
+#endif
+#if USE_SENDSPIN
+  void start_sendspin(sendspin::SendspinStream *stream);
 #endif
 
   /// @brief Stops the pipeline. Sends a stop signal to each task (if running) and clears the ring buffers.

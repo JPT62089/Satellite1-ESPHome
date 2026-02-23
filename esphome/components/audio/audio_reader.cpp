@@ -10,6 +10,10 @@
 #include "esp_crt_bundle.h"
 #endif
 
+#if USE_SENDSPIN
+#include "esphome/components/sendspin/sendspin_stream.h"
+#endif
+
 namespace esphome {
 namespace audio {
 
@@ -222,6 +226,29 @@ esp_err_t AudioReader::start(snapcast::SnapcastStream *stream, AudioFileType &fi
 }
 #endif
 
+#if USE_SENDSPIN
+esp_err_t AudioReader::start(sendspin::SendspinStream *stream, AudioFileType &file_type) {
+  if (this->sendspin_stream_ != nullptr) {
+    return ESP_FAIL;
+  }
+  if (stream == nullptr) {
+    return ESP_FAIL;
+  }
+
+  this->sendspin_stream_ = stream;
+  this->audio_file_type_ = AudioFileType::FLAC;
+  file_type = AudioFileType::FLAC;
+
+  auto rb = this->output_ring_buffer_.lock();
+  if (rb) {
+    rb->reset();
+  }
+
+  stream->start_with_notify(this->output_ring_buffer_, xTaskGetCurrentTaskHandle());
+  return ESP_OK;
+}
+#endif
+
 AudioReaderState AudioReader::read() {
   if (this->client_ != nullptr) {
     return this->http_read_();
@@ -230,6 +257,10 @@ AudioReaderState AudioReader::read() {
 #if USE_SNAPCAST
   } else if (this->snapcast_stream_ != nullptr) {
     return this->snapcast_read_();
+#endif
+#if USE_SENDSPIN
+  } else if (this->sendspin_stream_ != nullptr) {
+    return this->sendspin_read_();
 #endif
   }
 
@@ -376,10 +407,32 @@ AudioReaderState AudioReader::snapcast_read_() {
 }
 #endif
 
+#if USE_SENDSPIN
+AudioReaderState AudioReader::sendspin_read_() {
+  uint32_t state_value = 0;
+  if (xTaskNotifyWait(0, 0, &state_value, pdMS_TO_TICKS(500)) == pdTRUE) {
+    if (!this->sendspin_stream_->is_streaming()) {
+      this->sendspin_stream_ = nullptr;
+      return AudioReaderState::FINISHED;
+    }
+  }
+  if (!this->sendspin_stream_->is_streaming()) {
+    this->sendspin_stream_ = nullptr;
+    return AudioReaderState::FINISHED;
+  }
+  return AudioReaderState::READING;
+}
+#endif
+
 esp_err_t AudioReader::stop() {
 #if USE_SNAPCAST
   if (this->snapcast_stream_) {
     this->snapcast_stream_->stop_streaming();
+  }
+#endif
+#if USE_SENDSPIN
+  if (this->sendspin_stream_) {
+    this->sendspin_stream_->stop_streaming();
   }
 #endif
   auto rb = this->output_ring_buffer_.lock();

@@ -7,6 +7,10 @@
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 
+#if USE_SENDSPIN
+#include "esphome/components/sendspin/sendspin_stream.h"
+#endif
+
 namespace esphome {
 namespace speaker {
 
@@ -80,6 +84,18 @@ void AudioPipeline::start_snapcast(snapcast::SnapcastStream *stream) {
   PipelineSource source;
   source.type = PipelineSourceType::SNAPCAST;
   source.snapcast_stream = stream;
+  this->pending_source_ = source;
+}
+#endif
+
+#if USE_SENDSPIN
+void AudioPipeline::start_sendspin(sendspin::SendspinStream *stream) {
+  if (this->is_playing_) {
+    xEventGroupSetBits(this->event_group_, PIPELINE_COMMAND_STOP);
+  }
+  PipelineSource source;
+  source.type = PipelineSourceType::SENDSPIN;
+  source.sendspin_stream = stream;
   this->pending_source_ = source;
 }
 #endif
@@ -378,6 +394,11 @@ void AudioPipeline::read_task(void *params) {
 #if USE_SNAPCAST
         case PipelineSourceType::SNAPCAST:
           err = reader->start(src.snapcast_stream, this_pipeline->current_audio_file_type_);
+          break;
+#endif
+#if USE_SENDSPIN
+        case PipelineSourceType::SENDSPIN:
+          err = reader->start(src.sendspin_stream, this_pipeline->current_audio_file_type_);
           break;
 #endif
         default:

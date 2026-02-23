@@ -12,6 +12,9 @@
 #if USE_SNAPCAST
 #include "esphome/components/snapcast/snapcast_client.h"
 #endif
+#if USE_SENDSPIN
+#include "esphome/components/sendspin/sendspin_client.h"
+#endif
 
 namespace esphome {
 namespace speaker {
@@ -97,6 +100,11 @@ void SpeakerMediaPlayer::setup() {
 #if USE_SNAPCAST
   if (this->snapcast_client_ != nullptr) {
     this->snapcast_client_->set_media_player(this);
+  }
+#endif
+#if USE_SENDSPIN
+  if (this->sendspin_client_ != nullptr) {
+    this->sendspin_client_->set_media_player(this);
   }
 #endif
   ESP_LOGI(TAG, "Set up speaker media player");
@@ -399,8 +407,13 @@ void SpeakerMediaPlayer::loop() {
         }
         this->curr_media_item_ = next_item.value();
         if (next_item.value().url.has_value()) {
+#if USE_SENDSPIN
+          if (this->sendspin_client_ != nullptr && next_item.value().url.value().rfind("sendspin://", 0) == 0) {
+            this->media_pipeline_->start_sendspin(this->sendspin_client_->get_stream());
+          } else
+#endif
 #if USE_SNAPCAST
-          if (this->snapcast_client_ && this->snapcast_client_->is_snapcast_url(next_item.value().url.value())) {
+              if (this->snapcast_client_ && this->snapcast_client_->is_snapcast_url(next_item.value().url.value())) {
             this->snapcast_client_->connect_to_url(next_item.value().url.value());
             this->media_pipeline_->start_snapcast(this->snapcast_client_->get_stream());
           } else
@@ -464,6 +477,21 @@ void SpeakerMediaPlayer::play_snapcast_stream(const std::string &server_uri) {
   media_command.url = new std::string(server_uri);  // will be deleted in watch_media_commands_()
   media_command.announce = false;
   media_command.enqueue = false;
+  xQueueSend(this->media_control_command_queue_, &media_command, portMAX_DELAY);
+}
+#endif
+
+#if USE_SENDSPIN
+void SpeakerMediaPlayer::play_sendspin_stream() {
+  if (!this->is_ready())
+    return;
+  if (this->sendspin_client_ == nullptr)
+    return;
+
+  MediaCallCommand media_command;
+  media_command.announce = false;
+  media_command.enqueue = false;
+  media_command.url = new std::string("sendspin://stream");
   xQueueSend(this->media_control_command_queue_, &media_command, portMAX_DELAY);
 }
 #endif
