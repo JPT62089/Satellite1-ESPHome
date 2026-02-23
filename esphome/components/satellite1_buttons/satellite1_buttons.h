@@ -77,6 +77,7 @@ class Satellite1Button {
 
   // Edge tracking
   uint32_t press_start_ms_{0};
+  bool hold_consumed_{false};
 
   // Multi-click state
   uint8_t click_count_{0};
@@ -130,8 +131,6 @@ class Satellite1ButtonManager : public Component, public Satellite1SPIService {
   void add_combo(ComboConfig *combo) { this->combos_.push_back(combo); }
 
   void set_enabled(bool enabled) { this->enabled_ = enabled; }
-  bool get_volume_buttons_touched() const { return this->volume_buttons_touched_; }
-  void set_volume_buttons_touched(bool touched) { this->volume_buttons_touched_ = touched; }
 
  protected:
   void check_combos_(uint32_t now_ms);
@@ -139,7 +138,6 @@ class Satellite1ButtonManager : public Component, public Satellite1SPIService {
   std::vector<Satellite1Button *> buttons_;
   std::vector<ComboConfig *> combos_;
   bool enabled_{true};
-  bool volume_buttons_touched_{false};
 };
 
 }  // namespace satellite1

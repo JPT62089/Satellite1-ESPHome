@@ -42,11 +42,9 @@ CONF_ON_HOLD = "on_hold"
 CONF_ON_COMBO = "on_combo"
 CONF_DURATION = "duration"
 
-# XMOS port enum values
+# XMOS port enum values — only INPUT_A is valid for buttons on this hardware
 XMOS_PORTS = {
     "INPUT_A": 0,
-    "INPUT_B": 1,
-    "OUTPUT_A": 2,
 }
 
 # Hold threshold sub-schema

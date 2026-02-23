@@ -1,8 +1,6 @@
 #include "satellite1_buttons.h"
 #include "esphome/core/log.h"
 
-#include <algorithm>
-
 namespace esphome {
 namespace satellite1 {
 
@@ -31,6 +29,7 @@ void Satellite1Button::process(bool raw_pressed, uint32_t now_ms) {
     this->debounced_pressed_ = true;
     this->press_start_ms_ = now_ms;
     this->last_repeat_ms_ = now_ms;
+    this->hold_consumed_ = false;
 
     // Reset hold thresholds
     for (auto &ht : this->hold_thresholds_) {
@@ -44,19 +43,22 @@ void Satellite1Button::process(bool raw_pressed, uint32_t now_ms) {
     this->debounced_pressed_ = false;
     this->release_trigger_.trigger();
 
-    // Count clicks for multi-click detection
-    this->click_count_++;
-    this->last_release_ms_ = now_ms;
+    // Count clicks for multi-click detection (skip if a hold threshold fired)
+    if (!this->hold_consumed_) {
+      this->click_count_++;
+      this->last_release_ms_ = now_ms;
+    }
   }
 
   // --- While held: progressive hold thresholds ---
   if (this->debounced_pressed_) {
     uint32_t held_ms = now_ms - this->press_start_ms_;
 
-    // Sort thresholds by duration so we fire in order
+    // Check thresholds and fire any newly met
     for (auto &ht : this->hold_thresholds_) {
       if (!ht.fired && held_ms >= ht.duration_ms) {
         ht.fired = true;
+        this->hold_consumed_ = true;
         ht.trigger->trigger();
       }
     }
