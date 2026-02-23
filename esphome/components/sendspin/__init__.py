@@ -1,6 +1,7 @@
 import esphome.config_validation as cv
 import esphome.codegen as cg
 from esphome import automation
+from esphome.components import esp32
 from esphome.const import CONF_ID, CONF_PORT
 
 DEPENDENCIES = ["network", "audio"]
@@ -47,6 +48,7 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID], config[CONF_PORT])
     await cg.register_component(var, config)
     cg.add_define("USE_SENDSPIN", True)
+    esp32.add_idf_sdkconfig_option("CONFIG_HTTPD_WS_SUPPORT", True)
 
 
 @automation.register_action("sendspin.enable", EnableAction, SENDSPIN_ACTION_SCHEMA)

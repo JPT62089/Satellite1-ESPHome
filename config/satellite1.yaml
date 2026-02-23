@@ -109,6 +109,7 @@ external_components:
       - mixer
       - pcm5122
       - resampler
+      - sendspin
       - satellite1
       - satellite1_buttons
       - snapcast

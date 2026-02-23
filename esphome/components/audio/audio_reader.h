@@ -11,9 +11,7 @@
 #endif
 
 #if USE_SENDSPIN
-namespace sendspin {
-class SendspinStream;
-}  // namespace sendspin
+#include "esphome/components/sendspin/sendspin_stream.h"
 #endif
 
 #include "esp_err.h"

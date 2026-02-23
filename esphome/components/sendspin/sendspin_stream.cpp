@@ -204,19 +204,18 @@ void SendspinStream::handle_binary_frame_(const uint8_t *data, size_t len) {
     return;
 
   // Convert the local microsecond timestamp to tv_t (sec + usec components)
-  tv_t stamp = tv_t::from_microseconds(local_ts_us);
+  audio::tv_t stamp = audio::tv_t::from_microseconds(local_ts_us);
 
   // Skip chunks that are already in the past
-  if (stamp < tv_t::now()) {
-    ESP_LOGV(TAG, "Dropping stale audio chunk (%" PRId64 " us behind)", tv_t::now().to_microseconds() - local_ts_us);
+  if (stamp < audio::tv_t::now()) {
+    ESP_LOGV(TAG, "Dropping stale audio chunk (%" PRId64 " us behind)", audio::tv_t::now().to_microseconds() - local_ts_us);
     return;
   }
 
   // Acquire a write slot in the timed ring buffer large enough for the header + audio payload
   audio::timed_chunk_t *timed_chunk = nullptr;
-  audio::error_t acq_err =
-      rb->acquire_write_chunk(&timed_chunk, sizeof(audio::timed_chunk_t) + audio_len, pdMS_TO_TICKS(10));
-  if (acq_err != audio::error_t::OK || timed_chunk == nullptr) {
+  rb->acquire_write_chunk(&timed_chunk, sizeof(audio::timed_chunk_t) + audio_len, pdMS_TO_TICKS(10));
+  if (timed_chunk == nullptr) {
     ESP_LOGW(TAG, "Failed to acquire ring buffer write chunk (dropped %u bytes)", (unsigned) audio_len);
     return;
   }
@@ -238,7 +237,7 @@ void SendspinStream::set_state_(SendspinStreamState state) {
   this->state_.store(state, std::memory_order_relaxed);
   if (this->on_state_change_) {
     auto cb = this->on_state_change_;
-    App.defer([cb, state]() { cb(state); });
+    cb(state);
   }
 }
 

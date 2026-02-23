@@ -6,7 +6,7 @@ from pathlib import Path
 
 from esphome import automation, external_files
 import esphome.codegen as cg
-from esphome.components import audio, esp32, media_player, network, ota, psram, speaker, snapcast
+from esphome.components import audio, esp32, media_player, network, ota, psram, sendspin, speaker, snapcast
 import esphome.config_validation as cv
 from esphome.const import (
     CONF_BUFFER_SIZE,
@@ -56,6 +56,7 @@ CONF_VOLUME_INCREMENT = "volume_increment"
 CONF_VOLUME_MIN = "volume_min"
 CONF_VOLUME_MAX = "volume_max"
 CONF_SNAPCAST_CLIENT = "snapcast"
+CONF_SENDSPIN_CLIENT = "sendspin"
 
 
 speaker_ns = cg.esphome_ns.namespace("speaker")
@@ -317,7 +318,8 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_ON_MUTE): automation.validate_automation(single=True),
             cv.Optional(CONF_ON_UNMUTE): automation.validate_automation(single=True),
             cv.Optional(CONF_ON_VOLUME): automation.validate_automation(single=True),
-            cv.Optional(CONF_SNAPCAST_CLIENT): cv.use_id(snapcast.SnapcastClient)
+            cv.Optional(CONF_SNAPCAST_CLIENT): cv.use_id(snapcast.SnapcastClient),
+            cv.Optional(CONF_SENDSPIN_CLIENT): cv.use_id(sendspin.SendspinClient)
         }
     ),
     cv.only_on_esp32,
@@ -385,6 +387,10 @@ async def to_code(config):
     if client_id := config.get(CONF_SNAPCAST_CLIENT):
         snapcast_client = await cg.get_variable(client_id)
         cg.add( var.set_snapcast_client(snapcast_client))
+
+    if client_id := config.get(CONF_SENDSPIN_CLIENT):
+        sendspin_client = await cg.get_variable(client_id)
+        cg.add( var.set_sendspin_client(sendspin_client))
 
     if on_mute := config.get(CONF_ON_MUTE):
         await automation.build_automation(
