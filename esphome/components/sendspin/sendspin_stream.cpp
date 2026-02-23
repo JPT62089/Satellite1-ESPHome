@@ -74,7 +74,6 @@ esp_err_t SendspinStream::start_with_notify(std::weak_ptr<audio::TimedRingBuffer
   auto rb = ring_buffer.lock();
   if (rb)
     rb->reset();
-  this->set_state_(SendspinStreamState::STREAMING);
   return ESP_OK;
 }
 
@@ -175,6 +174,7 @@ void SendspinStream::handle_text_frame_(const std::string &json_str) {
   if (parse_stream_start(json_str, stream_info)) {
     ESP_LOGI(TAG, "stream/start: codec=%s %dHz %dch", stream_info.codec.c_str(), stream_info.sample_rate,
              stream_info.channels);
+    this->set_state_(SendspinStreamState::STREAMING);
     return;
   }
 }

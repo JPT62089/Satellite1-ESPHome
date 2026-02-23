@@ -386,11 +386,11 @@ async def to_code(config):
             )
     if client_id := config.get(CONF_SNAPCAST_CLIENT):
         snapcast_client = await cg.get_variable(client_id)
-        cg.add( var.set_snapcast_client(snapcast_client))
+        cg.add(var.set_snapcast_client(snapcast_client))
 
     if client_id := config.get(CONF_SENDSPIN_CLIENT):
         sendspin_client = await cg.get_variable(client_id)
-        cg.add( var.set_sendspin_client(sendspin_client))
+        cg.add(var.set_sendspin_client(sendspin_client))
 
     if on_mute := config.get(CONF_ON_MUTE):
         await automation.build_automation(

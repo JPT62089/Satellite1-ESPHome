@@ -433,6 +433,7 @@ esp_err_t AudioReader::stop() {
 #if USE_SENDSPIN
   if (this->sendspin_stream_) {
     this->sendspin_stream_->stop_streaming();
+    this->sendspin_stream_ = nullptr;
   }
 #endif
   auto rb = this->output_ring_buffer_.lock();

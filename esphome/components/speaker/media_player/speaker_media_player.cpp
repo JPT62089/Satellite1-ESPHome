@@ -624,6 +624,11 @@ void SpeakerMediaPlayer::set_volume_(float volume, bool publish, bool restore_on
     this->snapcast_client_->report_volume(volume, this->is_muted_);
   }
 #endif
+#if USE_SENDSPIN
+  if (this->sendspin_client_ != nullptr) {
+    this->sendspin_client_->report_volume(volume, this->is_muted_);
+  }
+#endif
   this->defer([this, volume]() { this->volume_trigger_->trigger(volume); });
 }
 

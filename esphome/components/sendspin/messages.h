@@ -18,7 +18,7 @@ enum class BinaryFrameType : uint8_t {
 };
 
 // Binary frame header: 1 byte type + 8 bytes big-endian int64 server-microsecond timestamp
-constexpr size_t BINARY_HEADER_SIZE = 9;
+static constexpr size_t BINARY_HEADER_SIZE = 9;
 
 inline int64_t parse_binary_timestamp(const uint8_t *data) {
   int64_t ts = 0;
