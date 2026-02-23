@@ -1,4 +1,6 @@
 globals:
+  # Tracks if a volume button was recently touched (for LED ring display).
+  # Cleared after 2s by the control_volume script in media_player.yaml.
   - id: volume_buttons_touched
     type: bool
     restore_value: no
@@ -9,6 +11,8 @@ globals:
     restore_value: no
     initial_value: 'false'
 
+  # Set at 10s hold, cleared on release or at 22s. Used by on_release to
+  # detect when the user aborts a factory reset by releasing the button.
   - id: factory_reset_warning_active
     type: bool
     restore_value: no
@@ -34,7 +38,7 @@ satellite1_buttons:
     - id: btn_up
       port: INPUT_A
       pin: 0
-      name: "Volume Up"
+      name: "Button Up (Vol+)"
       icon: "mdi:volume-plus"
       on_press:
         - lambda: id(volume_buttons_touched) = true;
@@ -45,7 +49,7 @@ satellite1_buttons:
     - id: btn_down
       port: INPUT_A
       pin: 2
-      name: "Volume Down"
+      name: "Button Down (Vol-)"
       icon: "mdi:volume-minus"
       on_press:
         - lambda: id(volume_buttons_touched) = true;
@@ -56,9 +60,9 @@ satellite1_buttons:
     - id: btn_left
       port: INPUT_A
       pin: 3
-      name: "Hardware Mute"
+      name: "Button Left (HW Mute)"
       icon: "mdi:microphone-off"
-      on_single_click:
+      on_press:
         - if:
             condition:
               switch.is_on: master_mute_switch
@@ -80,7 +84,7 @@ satellite1_buttons:
                   state: ON
 
     - id: btn_action
-      name: "Action"
+      name: "Button Right (Action)"
       icon: "mdi:gesture-tap"
       gpio:
         number: 0
@@ -175,6 +179,7 @@ satellite1_buttons:
                   - button.press: factory_reset_button
 
 script:
+  # Handles the priority chain: timer -> voice assistant -> announcement -> music -> start VA.
   - id: handle_single_press
     then:
       - if:
