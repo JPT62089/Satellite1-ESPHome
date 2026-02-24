@@ -1,5 +1,5 @@
 import esphome.codegen as cg
-from esphome.components import esp32, light, speaker
+from esphome.components import esp32, light, number, speaker, switch
 from esphome.components.light.effects import register_addressable_effect
 from esphome.components.light.types import AddressableLightEffect
 import esphome.config_validation as cv
@@ -33,10 +33,20 @@ WaveformOrbitEffect = audio_visualizer_ns.class_(
 )
 
 CONF_VISUALIZER = "visualizer"
+CONF_VIZ_SPEED = "speed"
+CONF_VIZ_INTENSITY = "intensity"
+CONF_VIZ_REVERSE = "reverse"
+CONF_VIZ_MIRROR = "mirror"
+CONF_VIZ_START = "start"
 
 # Shared schema: each effect auto-discovers the single AudioVisualizerSpeaker.
 VISUALIZER_EFFECT_SCHEMA = {
     cv.GenerateID(CONF_VISUALIZER): cv.use_id(AudioVisualizerSpeaker),
+    cv.Optional(CONF_VIZ_SPEED): cv.use_id(number.Number),
+    cv.Optional(CONF_VIZ_INTENSITY): cv.use_id(number.Number),
+    cv.Optional(CONF_VIZ_REVERSE): cv.use_id(switch.Switch),
+    cv.Optional(CONF_VIZ_MIRROR): cv.use_id(switch.Switch),
+    cv.Optional(CONF_VIZ_START): cv.use_id(number.Number),
 }
 
 
@@ -45,7 +55,23 @@ async def _visualizer_effect_to_code(config, effect_id):
     var = cg.new_Pvariable(effect_id, config[CONF_NAME])
     viz = await cg.get_variable(config[CONF_VISUALIZER])
     cg.add(var.set_visualizer(viz))
-    cg.add(var.set_update_interval(33))
+    # Note: set_update_interval() intentionally omitted — speed entity drives
+    # the interval dynamically; base class default (33ms) is the fallback.
+    if CONF_VIZ_SPEED in config:
+        speed = await cg.get_variable(config[CONF_VIZ_SPEED])
+        cg.add(var.set_speed(speed))
+    if CONF_VIZ_INTENSITY in config:
+        intensity = await cg.get_variable(config[CONF_VIZ_INTENSITY])
+        cg.add(var.set_intensity(intensity))
+    if CONF_VIZ_REVERSE in config:
+        rev = await cg.get_variable(config[CONF_VIZ_REVERSE])
+        cg.add(var.set_reverse(rev))
+    if CONF_VIZ_MIRROR in config:
+        mir = await cg.get_variable(config[CONF_VIZ_MIRROR])
+        cg.add(var.set_mirror(mir))
+    if CONF_VIZ_START in config:
+        st = await cg.get_variable(config[CONF_VIZ_START])
+        cg.add(var.set_start(st))
     return var
 
 
