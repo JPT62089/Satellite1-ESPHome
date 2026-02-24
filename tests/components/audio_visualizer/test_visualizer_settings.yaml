@@ -1,0 +1,157 @@
+substitutions:
+  friendly_name: "Satellite1 Visualizer Settings Test"
+  node_name: sat1-visualizer-test
+
+esphome:
+  name: ${node_name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.1.0
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: ESP32S3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+wifi:
+  ssid: "test-ssid"
+  password: "test-password"
+
+logger:
+  level: DEBUG
+
+api:
+
+http_request:
+
+external_components:
+  - source:
+      type: local
+      path: ../../../esphome/components
+    components:
+      - audio
+      - audio_visualizer
+      - i2s_audio
+      - mixer
+      - resampler
+      - speaker
+
+i2s_audio:
+  - id: i2s_shared
+    i2s_lrclk_pin: GPIO3
+    i2s_bclk_pin: GPIO2
+    i2s_mclk_pin: GPIO16
+
+speaker:
+  - platform: i2s_audio
+    id: i2s_audio_speaker
+    sample_rate: 48000
+    i2s_dout_pin: GPIO9
+    bits_per_sample: 32bit
+    i2s_audio_id: i2s_shared
+    dac_type: external
+    channel: stereo
+    timeout: never
+
+  - platform: mixer
+    id: mixing_speaker
+    output_speaker: i2s_audio_speaker
+    num_channels: 2
+    source_speakers:
+      - id: media_mixing_input
+        timeout: never
+      - id: announcement_mixing_input
+        timeout: never
+
+  - platform: audio_visualizer
+    id: audio_viz
+    output_speaker: media_mixing_input
+    bits_per_sample: 16
+    num_channels: 2
+    sample_rate: 48000
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: hw_leds
+    pin: GPIO21
+    num_leds: 24
+    rgb_order: GRB
+    chipset: WS2812
+    effects:
+      - visualizer_spectrum:
+          name: "Visualizer Spectrum"
+          speed: viz_speed
+          intensity: viz_intensity
+          reverse: viz_reverse
+          mirror: viz_mirror
+          start: viz_start
+      - visualizer_pulse:
+          name: "Visualizer Pulse"
+          speed: viz_speed
+          intensity: viz_intensity
+          reverse: viz_reverse
+          mirror: viz_mirror
+          start: viz_start
+      - visualizer_vu_sweep:
+          name: "Visualizer VU Sweep"
+          speed: viz_speed
+          intensity: viz_intensity
+          reverse: viz_reverse
+          mirror: viz_mirror
+          start: viz_start
+      - visualizer_waveform:
+          name: "Visualizer Waveform"
+          speed: viz_speed
+          intensity: viz_intensity
+          reverse: viz_reverse
+          mirror: viz_mirror
+          start: viz_start
+
+number:
+  - platform: template
+    name: "Visualizer Speed"
+    id: viz_speed
+    min_value: 1
+    max_value: 10
+    step: 1
+    initial_value: 5
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    name: "Visualizer Intensity"
+    id: viz_intensity
+    min_value: 0
+    max_value: 200
+    step: 5
+    initial_value: 100
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    name: "Visualizer Start"
+    id: viz_start
+    min_value: 0
+    max_value: 23
+    step: 1
+    initial_value: 0
+    restore_value: true
+    optimistic: true
+
+switch:
+  - platform: template
+    name: "Visualizer Reverse"
+    id: viz_reverse
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+
+  - platform: template
+    name: "Visualizer Mirror"
+    id: viz_mirror
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
