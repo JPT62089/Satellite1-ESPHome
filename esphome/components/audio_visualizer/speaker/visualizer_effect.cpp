@@ -55,6 +55,7 @@ void PulseBeatEffect::apply(light::AddressableLight &it, const Color &current_co
     return;
   float rms = this->viz_->get_rms();
   bool beat = this->viz_->consume_beat();
+  float scale = this->get_intensity_scale();
 
   // Asymmetric envelope: fast attack, slow decay
   if (rms > this->smoothed_) {
@@ -67,7 +68,7 @@ void PulseBeatEffect::apply(light::AddressableLight &it, const Color &current_co
     this->beat_flash_ = 1.0f;
   this->beat_flash_ *= 0.75f;  // decay flash over several frames
 
-  float brightness = std::min(1.0f, this->smoothed_ + this->beat_flash_ * 0.5f);
+  float brightness = std::min(1.0f, (this->smoothed_ + this->beat_flash_ * 0.5f) * scale);
   // Desaturate toward white on beat flash
   float sat = 1.0f - this->beat_flash_ * 0.7f;
   Color c = hsv_to_color(0.57f, sat, brightness);  // sky-blue base
