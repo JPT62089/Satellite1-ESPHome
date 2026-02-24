@@ -100,7 +100,7 @@ void VUSweepEffect::apply(light::AddressableLight &it, const Color &current_colo
 
     bool on;
     if (mir) {
-      int half_lit = lit / 2;
+      int half_lit = (lit + 1) / 2;
       if (rev) {
         // Fill from antipode (start + n/2) symmetrically in both directions
         int apos = (pos + n / 2) % n;  // distance from antipode
@@ -115,6 +115,9 @@ void VUSweepEffect::apply(light::AddressableLight &it, const Color &current_colo
     }
 
     if (on) {
+      // Gradient anchored to pos=0 (start), not to the fill direction.
+      // In reverse mode the lit arc occupies high pos values, so the
+      // perceived color-to-level mapping is warm near start, cool at far edge.
       float t = (n > 1) ? (float) pos / (n - 1) : 0.0f;
       Color c;
       if (t < 0.5f) {
@@ -152,6 +155,8 @@ void WaveformOrbitEffect::apply(light::AddressableLight &it, const Color &curren
 
   if (mir) {
     // Show orbit on both halves simultaneously
+    // Note: if count is odd, the physical midpoint LED retains its previous value.
+    // The hardware ring has 24 LEDs (even), so this never occurs in practice.
     int half = count / 2;
     for (int i = 0; i < half; i++) {
       uint32_t idx = (this->head_ + NUM_BANDS - 1 - i) % NUM_BANDS;
