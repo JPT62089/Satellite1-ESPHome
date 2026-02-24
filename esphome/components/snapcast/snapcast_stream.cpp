@@ -46,8 +46,6 @@ static const uint32_t CONNECTION_TIMEOUT_MS = 2000;
 static const size_t TASK_STACK_SIZE = 4 * 1024;
 static const uint32_t TIME_SYNC_INTERVAL_MS = 2000;
 
-QueueHandle_t outgoing_queue = nullptr;
-
 enum StreamTaskBits : uint32_t {
   // Command sent by the main controller logic to the transport task.
   // Tells the transport task to attempt a TCP connection.
@@ -105,7 +103,9 @@ esp_err_t SnapcastStream::connect(std::string server, uint32_t port) {
   this->port_ = port;
   if (this->stream_task_handle_ == nullptr) {
     RAMAllocator<StackType_t> stack_allocator(RAMAllocator<StackType_t>::ALLOC_INTERNAL);
-    this->task_stack_buffer_ = stack_allocator.allocate(TASK_STACK_SIZE);
+    if (this->task_stack_buffer_ == nullptr) {
+      this->task_stack_buffer_ = stack_allocator.allocate(TASK_STACK_SIZE);
+    }
     if (this->task_stack_buffer_ == nullptr) {
       ESP_LOGE(TAG, "Failed to allocate memory.");
       this->set_state_(StreamState::ERROR);
@@ -129,14 +129,14 @@ esp_err_t SnapcastStream::connect(std::string server, uint32_t port) {
       return ESP_FAIL;
     }
   }
-  xTaskNotify(this->stream_task_handle_, CONNECT_BIT, eSetValueWithOverwrite);
+  xTaskNotify(this->stream_task_handle_, CONNECT_BIT, eSetBits);
   return ESP_OK;
 }
 
 esp_err_t SnapcastStream::disconnect() {
   // close connection and stop all running tasks
   if (this->stream_task_handle_) {
-    xTaskNotify(this->stream_task_handle_, STOP_BIT, eSetValueWithOverwrite);
+    xTaskNotify(this->stream_task_handle_, STOP_BIT, eSetBits);
   } else {
     this->set_state_(StreamState::DESTROYED);
   }
@@ -148,12 +148,16 @@ esp_err_t SnapcastStream::start_with_notify(std::weak_ptr<esphome::TimedRingBuff
   ESP_LOGD(TAG, "Starting stream...");
   this->write_ring_buffer_ = ring_buffer;
   this->notification_target_ = notification_task;
-  xTaskNotify(this->stream_task_handle_, START_STREAM_BIT, eSetValueWithOverwrite);
+  if (this->stream_task_handle_) {
+    xTaskNotify(this->stream_task_handle_, START_STREAM_BIT, eSetBits);
+  }
   return ESP_OK;
 }
 
 esp_err_t SnapcastStream::stop_streaming() {
-  xTaskNotify(this->stream_task_handle_, STOP_STREAM_BIT, eSetValueWithOverwrite);
+  if (this->stream_task_handle_) {
+    xTaskNotify(this->stream_task_handle_, STOP_STREAM_BIT, eSetBits);
+  }
   return ESP_OK;
 }
 
@@ -161,13 +165,14 @@ esp_err_t SnapcastStream::report_volume(uint8_t volume, bool muted) {
   if (volume != this->volume_ || muted_ != this->muted_) {
     this->volume_ = volume;
     this->muted_ = muted;
-    xTaskNotify(this->stream_task_handle_, SEND_REPORT_BIT, eSetValueWithOverwrite);
+    xTaskNotify(this->stream_task_handle_, SEND_REPORT_BIT, eSetBits);
   }
   return ESP_OK;
 }
 
 static void transport_task_(std::string server, uint32_t port, std::shared_ptr<ChunkedRingBuffer> ring_buffer,
-                            TaskHandle_t stream_task_handle, TimeStats *time_stats) {
+                            TaskHandle_t stream_task_handle, TimeStats *time_stats,
+                            QueueHandle_t outgoing_queue) {
   constexpr size_t HEADER_SIZE = sizeof(MessageHeader);
   volatile bool stop_requested = false;
   while (!stop_requested) {
@@ -290,7 +295,10 @@ static void transport_task_(std::string server, uint32_t port, std::shared_ptr<C
               memcpy(chunk, rx_buffer, total_size);
               ring_buffer->release_write_chunk(chunk, total_size);
             } else {
-              // Ring buffer full! Dropping packet.
+              static uint32_t rx_drop_count = 0;
+              rx_drop_count++;
+              ESP_LOGW("transport", "RX buffer full — dropping %zu-byte message (total dropped: %" PRIu32 ")",
+                       total_size, rx_drop_count);
             }
             // Reset for next message
             rx_buffer_length = 0;
@@ -405,7 +413,17 @@ esp_err_t SnapcastStream::read_and_process_messages_(ChunkedRingBuffer *read_rin
         last_time_stamp = time_stamp;
 #endif
         if (time_stamp < tv_t::now()) {
-          // chunk is in the past, ignore it
+          int64_t delta_ms = (tv_t::now() - time_stamp).to_millis();
+          this->past_drop_streak_++;
+          if (this->past_drop_streak_ == 1) {
+            // Log the first drop of a new streak at WARN so it's visible without DEBUG logging
+            ESP_LOGW(TAG, "chunk in past by %" PRId64 " ms — dropping (clock_offset=%" PRId64 " ms)",
+                     delta_ms, this->est_time_diff_.load(std::memory_order_relaxed).to_millis());
+          } else {
+            // Subsequent drops in the same streak: DEBUG to avoid flooding WARN
+            ESP_LOGD(TAG, "chunk in past by %" PRId64 " ms (streak: %" PRIu32 ")", delta_ms,
+                     this->past_drop_streak_);
+          }
 #if SNAPCAST_DEBUG
           printf("chunk-read: skipping full frame: delta: %lld\n", time_stamp.to_millis() - tv_t::now().to_millis());
           printf("server-time: sec:%d, usec:%d\n", wire_chunk_msg.timestamp_sec, wire_chunk_msg.timestamp_usec);
@@ -414,6 +432,10 @@ esp_err_t SnapcastStream::read_and_process_messages_(ChunkedRingBuffer *read_rin
           read_ring_buffer->release_read_chunk(chunk);
           vTaskDelay(pdMS_TO_TICKS(1));
           continue;
+        }
+        if (this->past_drop_streak_ > 0) {
+          ESP_LOGW(TAG, "chunk-drop streak ended: %" PRIu32 " chunk(s) discarded", this->past_drop_streak_);
+          this->past_drop_streak_ = 0;
         }
 
         timed_chunk_t *timed_chunk = nullptr;
@@ -467,10 +489,9 @@ void SnapcastStream::stream_task_() {
     return;
   }
 
-  // For example: allow up to 10 pending messages
-  outgoing_queue = xQueueCreate(10, sizeof(SnapcastMessage *));
+  this->outgoing_queue_ = xQueueCreate(10, sizeof(SnapcastMessage *));
 
-  if (outgoing_queue == NULL) {
+  if (this->outgoing_queue_ == nullptr) {
     ESP_LOGE(TAG, "Failed to create outgoing queue!");
     return;
   }
@@ -481,6 +502,7 @@ void SnapcastStream::stream_task_() {
     uint32_t port;
     TaskHandle_t stream_task_handle;
     TimeStats *time_stats_;
+    QueueHandle_t outgoing_queue;
   };
 
   ReadTaskArgs *args = new ReadTaskArgs();
@@ -488,13 +510,15 @@ void SnapcastStream::stream_task_() {
   args->server = this->server_;
   args->port = this->port_;
   args->stream_task_handle = xTaskGetCurrentTaskHandle();
-  args->time_stats_ = &this->time_stats_;  // Pass the time stats reference
+  args->time_stats_ = &this->time_stats_;
+  args->outgoing_queue = this->outgoing_queue_;
 
   TaskHandle_t transport_task_handle = nullptr;
   BaseType_t result = xTaskCreatePinnedToCore(
       [](void *param) {
         auto *args = static_cast<ReadTaskArgs *>(param);
-        transport_task_(args->server, args->port, args->buffer, args->stream_task_handle, args->time_stats_);
+        transport_task_(args->server, args->port, args->buffer, args->stream_task_handle, args->time_stats_,
+                        args->outgoing_queue);
         delete args;
         vTaskDelete(nullptr);  // Task cleans itself up after loop exits
       },
@@ -507,6 +531,12 @@ void SnapcastStream::stream_task_() {
 
   if (result != pdPASS) {
     ESP_LOGE(TAG, "Failed to create Snapcast RX/TX task!");
+    SnapcastMessage *pending_msg;
+    while (xQueueReceive(this->outgoing_queue_, &pending_msg, 0) == pdPASS) {
+      delete pending_msg;
+    }
+    vQueueDelete(this->outgoing_queue_);
+    this->outgoing_queue_ = nullptr;
     return;
   }
 
@@ -538,7 +568,7 @@ void SnapcastStream::stream_task_() {
       }
 
       if (notify_value & SEND_REPORT_BIT) {
-        if (this->state_ != StreamState::DISCONNECTED && outgoing_queue != nullptr) {
+        if (this->state_ != StreamState::DISCONNECTED && this->outgoing_queue_ != nullptr) {
           this->send_report_();
         }
       }
@@ -586,6 +616,16 @@ void SnapcastStream::stream_task_() {
       }
     }
   }
+  // Drain and release the outgoing queue before the task exits
+  if (this->outgoing_queue_ != nullptr) {
+    SnapcastMessage *pending_msg;
+    while (xQueueReceive(this->outgoing_queue_, &pending_msg, 0) == pdPASS) {
+      delete pending_msg;
+    }
+    vQueueDelete(this->outgoing_queue_);
+    this->outgoing_queue_ = nullptr;
+  }
+
   this->set_state_(StreamState::DESTROYED);
 }
 
@@ -614,6 +654,7 @@ void SnapcastStream::start_streaming_() {
     return;
   }
   this->codec_header_sent_ = false;
+  this->past_drop_streak_ = 0;
   this->send_hello_();
   rb->reset();
   this->start_after_connecting_ = false;
@@ -631,8 +672,8 @@ void SnapcastStream::stop_streaming_() {
 
 void SnapcastStream::send_message_(SnapcastMessage *msg) {
   assert(msg->getMessageSize() <= sizeof(tx_buffer));
-  if (xQueueSend(outgoing_queue, &msg, 0) != pdPASS) {
-    delete msg;  // Clean up if failed
+  if (this->outgoing_queue_ == nullptr || xQueueSend(this->outgoing_queue_, &msg, 0) != pdPASS) {
+    delete msg;
   }
 }
 
