@@ -140,16 +140,41 @@ void WaveformOrbitEffect::apply(light::AddressableLight &it, const Color &curren
     return;
   float rms = this->viz_->get_rms();
 
-  // Push new sample into the circular history buffer
+  // Always push new sample at head and advance forward
   this->history_[this->head_] = rms;
   this->head_ = (this->head_ + 1) % NUM_BANDS;
 
-  // LED 0 = most recent value, LED N-1 = oldest
   int count = std::min((int) it.size(), (int) NUM_BANDS);
-  for (int i = 0; i < count; i++) {
-    uint32_t idx = (this->head_ + NUM_BANDS - 1 - i) % NUM_BANDS;
-    float brightness = std::min(1.0f, this->history_[idx]);
-    it[i] = hsv_to_color(0.57f, 1.0f, brightness);
+  float scale = this->get_intensity_scale();
+  bool rev = this->get_reverse();
+  bool mir = this->get_mirror();
+  int start = this->get_start_offset();
+
+  if (mir) {
+    // Show orbit on both halves simultaneously
+    int half = count / 2;
+    for (int i = 0; i < half; i++) {
+      uint32_t idx = (this->head_ + NUM_BANDS - 1 - i) % NUM_BANDS;
+      float brightness = std::min(1.0f, this->history_[idx] * scale);
+      Color c = hsv_to_color(0.57f, 1.0f, brightness);
+      if (rev) {
+        // Newest energy at antipode, orbits toward start from both sides
+        it[(start + count / 2 + i) % count] = c;
+        it[(start + count / 2 - 1 - i + count) % count] = c;
+      } else {
+        // Newest energy at start, orbits away in both directions
+        it[(start + i) % count] = c;
+        it[(start + count - 1 - i) % count] = c;
+      }
+    }
+  } else {
+    for (int i = 0; i < count; i++) {
+      uint32_t idx = (this->head_ + NUM_BANDS - 1 - i) % NUM_BANDS;
+      float brightness = std::min(1.0f, this->history_[idx] * scale);
+      // rev: newest at start, trails counterclockwise; else trails clockwise
+      int led = rev ? (start - i + count) % count : (start + i) % count;
+      it[led] = hsv_to_color(0.57f, 1.0f, brightness);
+    }
   }
   for (int i = count; i < it.size(); i++)
     it[i] = Color(0, 0, 0);
