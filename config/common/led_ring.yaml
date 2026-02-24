@@ -576,7 +576,7 @@ script:
             id(control_leds_voice_assistant_not_ready_phase).execute();
           } else if (id(is_timer_active)) {
             id(control_leds_timer_ticking).execute();
-          } else if (id(visualizer_enabled).state &&
+          } else if (id(visualizer_preset).current_option() != "Off" &&
                      id(external_media_player).state ==
                          media_player::MediaPlayerState::MEDIA_PLAYER_STATE_PLAYING) {
             auto preset = id(visualizer_preset).current_option();
