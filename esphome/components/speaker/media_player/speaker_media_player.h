@@ -145,6 +145,9 @@ class SpeakerMediaPlayer : public Component,
   /// @brief Dispatches a transport command (play/pause/stop/toggle/mute/volume/repeat/clear).
   void handle_transport_command_(const MediaCallCommand &cmd);
 
+  /// @brief Stops the media pipeline and uses set_interval to unpause it once it has fully stopped.
+  void stop_and_unpause_media_();
+
   std::unique_ptr<AudioPipeline> announcement_pipeline_;
   std::unique_ptr<AudioPipeline> media_pipeline_;
   Speaker *media_speaker_{nullptr};
@@ -178,6 +181,9 @@ class SpeakerMediaPlayer : public Component,
 
   bool is_paused_{false};
   bool is_muted_{false};
+
+  uint8_t unpause_media_remaining_{0};
+  uint8_t unpause_announcement_remaining_{0};
 
   // The amount to change the volume on volume up/down commands
   float volume_increment_;
