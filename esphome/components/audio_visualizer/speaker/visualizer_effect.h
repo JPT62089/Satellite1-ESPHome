@@ -3,6 +3,8 @@
 
 #include "audio_visualizer_speaker.h"
 #include "esphome/components/light/addressable_light_effect.h"
+#include "esphome/components/number/number.h"
+#include "esphome/components/switch/switch.h"
 
 #include <cmath>
 
@@ -61,12 +63,32 @@ class VisualizerEffect : public light::AddressableLightEffect {
   explicit VisualizerEffect(const char *name) : AddressableLightEffect(name) {}
   void set_visualizer(AudioVisualizerSpeaker *viz) { this->viz_ = viz; }
   void set_update_interval(uint32_t ms) { this->update_interval_ = ms; }
+  void set_speed(number::Number *n) { this->speed_ = n; }
+  void set_intensity(number::Number *n) { this->intensity_ = n; }
+  void set_reverse(switch_::Switch *s) { this->reverse_ = s; }
+  void set_mirror(switch_::Switch *s) { this->mirror_ = s; }
+  void set_start(number::Number *n) { this->start_ = n; }
+
+  float get_intensity_scale() const {
+    if (!this->intensity_)
+      return 1.0f;
+    return std::max(0.0f, this->intensity_->state / 100.0f);
+  }
+  bool get_reverse() const { return this->reverse_ && this->reverse_->state; }
+  bool get_mirror() const { return this->mirror_ && this->mirror_->state; }
+  int get_start_offset() const { return this->start_ ? (int) this->start_->state : 0; }
 
  protected:
   /// Returns true if enough time has elapsed since last_run_. Call at the start of apply().
   bool should_update_() {
+    uint32_t interval = this->update_interval_;  // fallback: 33ms
+    if (this->speed_) {
+      float s = std::max(1.0f, std::min(10.0f, this->speed_->state));
+      // 1 → 200ms, 10 → 16ms, linear
+      interval = (uint32_t) (200.0f - (s - 1.0f) * (184.0f / 9.0f));
+    }
     uint32_t now = millis();
-    if (now - this->last_run_ < this->update_interval_)
+    if (now - this->last_run_ < interval)
       return false;
     this->last_run_ = now;
     return true;
@@ -75,6 +97,11 @@ class VisualizerEffect : public light::AddressableLightEffect {
   AudioVisualizerSpeaker *viz_{nullptr};
   uint32_t update_interval_{33};
   uint32_t last_run_{0};
+  number::Number *speed_{nullptr};
+  number::Number *intensity_{nullptr};
+  switch_::Switch *reverse_{nullptr};
+  switch_::Switch *mirror_{nullptr};
+  number::Number *start_{nullptr};
 };
 
 // Preset 1: Spectrum Ring
