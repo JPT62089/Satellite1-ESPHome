@@ -19,6 +19,46 @@ switch:
     on_turn_off:
       - script.execute: control_leds
 
+  - platform: template
+    name: "Visualizer Reverse"
+    id: viz_reverse
+    icon: "mdi:swap-horizontal"
+    entity_category: config
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+    on_turn_on:
+      - if:
+          condition:
+            switch.is_on: visualizer_enabled
+          then:
+            - script.execute: control_leds
+    on_turn_off:
+      - if:
+          condition:
+            switch.is_on: visualizer_enabled
+          then:
+            - script.execute: control_leds
+
+  - platform: template
+    name: "Visualizer Mirror"
+    id: viz_mirror
+    icon: "mdi:mirror"
+    entity_category: config
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+    on_turn_on:
+      - if:
+          condition:
+            switch.is_on: visualizer_enabled
+          then:
+            - script.execute: control_leds
+    on_turn_off:
+      - if:
+          condition:
+            switch.is_on: visualizer_enabled
+          then:
+            - script.execute: control_leds
+
 select:
   - platform: template
     name: "Visualizer Preset"
@@ -33,6 +73,62 @@ select:
     initial_option: "Spectrum"
     optimistic: true
     restore_value: true
+    on_value:
+      - if:
+          condition:
+            switch.is_on: visualizer_enabled
+          then:
+            - script.execute: control_leds
+
+number:
+  - platform: template
+    name: "Visualizer Speed"
+    id: viz_speed
+    icon: "mdi:speedometer"
+    entity_category: config
+    min_value: 1
+    max_value: 10
+    step: 1
+    initial_value: 5
+    restore_value: true
+    optimistic: true
+    on_value:
+      - if:
+          condition:
+            switch.is_on: visualizer_enabled
+          then:
+            - script.execute: control_leds
+
+  - platform: template
+    name: "Visualizer Intensity"
+    id: viz_intensity
+    icon: "mdi:brightness-6"
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 200
+    step: 5
+    initial_value: 100
+    restore_value: true
+    optimistic: true
+    on_value:
+      - if:
+          condition:
+            switch.is_on: visualizer_enabled
+          then:
+            - script.execute: control_leds
+
+  - platform: template
+    name: "Visualizer Start"
+    id: viz_start
+    icon: "mdi:map-marker-circle"
+    entity_category: config
+    min_value: 0
+    max_value: 23
+    step: 1
+    initial_value: 0
+    restore_value: true
+    optimistic: true
     on_value:
       - if:
           condition:
