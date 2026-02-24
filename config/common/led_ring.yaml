@@ -504,12 +504,32 @@ light:
               index = (index + 1);
       - visualizer_spectrum:
           name: "Visualizer Spectrum"
+          speed: viz_speed
+          intensity: viz_intensity
+          reverse: viz_reverse
+          mirror: viz_mirror
+          start: viz_start
       - visualizer_pulse:
           name: "Visualizer Pulse"
+          speed: viz_speed
+          intensity: viz_intensity
+          reverse: viz_reverse
+          mirror: viz_mirror
+          start: viz_start
       - visualizer_vu_sweep:
           name: "Visualizer VU Sweep"
+          speed: viz_speed
+          intensity: viz_intensity
+          reverse: viz_reverse
+          mirror: viz_mirror
+          start: viz_start
       - visualizer_waveform:
           name: "Visualizer Waveform"
+          speed: viz_speed
+          intensity: viz_intensity
+          reverse: viz_reverse
+          mirror: viz_mirror
+          start: viz_start
 
 script:
   # Master script controlling the LEDs, based on different conditions : initialization in progress, wifi and api connected and voice assistant phase.
