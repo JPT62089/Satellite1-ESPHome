@@ -32,15 +32,16 @@ inline int64_t parse_binary_timestamp(const uint8_t *data) {
 inline std::string build_client_hello(const std::string &client_id, const std::string &device_name) {
   return json::build_json([&](JsonObject root) {
     root["type"] = "client/hello";
-    JsonObject data = root["data"].to<JsonObject>();
-    data["client_id"] = client_id;
-    data["name"] = device_name;
-    data["version"] = 1;
+    JsonObject payload = root["payload"].to<JsonObject>();
+    payload["client_id"] = client_id;
+    payload["name"] = device_name;
+    payload["version"] = 1;
 
-    JsonArray roles = data["supported_roles"].to<JsonArray>();
-    JsonObject player_role = roles.add<JsonObject>();
-    player_role["role"] = "player@v1";
-    JsonObject player_support = player_role["player_support"].to<JsonObject>();
+    JsonArray roles = payload["supported_roles"].to<JsonArray>();
+    roles.add("player@v1");
+    roles.add("controller@v1");
+
+    JsonObject player_support = payload["player@v1_support"].to<JsonObject>();
     JsonArray formats = player_support["supported_formats"].to<JsonArray>();
     JsonObject fmt = formats.add<JsonObject>();
     fmt["codec"] = "flac";
@@ -48,9 +49,6 @@ inline std::string build_client_hello(const std::string &client_id, const std::s
     fmt["sample_rate"] = 48000;
     fmt["bit_depth"] = 16;
     player_support["buffer_capacity"] = 131072;  // 128 KB
-
-    JsonObject ctrl_role = roles.add<JsonObject>();
-    ctrl_role["role"] = "controller@v1";
   });
 }
 
@@ -58,7 +56,7 @@ inline std::string build_client_hello(const std::string &client_id, const std::s
 inline std::string build_client_time(int64_t ts_us) {
   return json::build_json([&](JsonObject root) {
     root["type"] = "client/time";
-    root["data"]["client_transmitted"] = ts_us;
+    root["payload"]["client_transmitted"] = ts_us;
   });
 }
 
@@ -66,9 +64,9 @@ inline std::string build_client_time(int64_t ts_us) {
 inline std::string build_client_state(float volume, bool muted) {
   return json::build_json([&](JsonObject root) {
     root["type"] = "client/state";
-    JsonObject data = root["data"].to<JsonObject>();
-    data["state"] = "synchronized";
-    JsonObject player = data["player"].to<JsonObject>();
+    JsonObject payload = root["payload"].to<JsonObject>();
+    payload["state"] = "synchronized";
+    JsonObject player = payload["player"].to<JsonObject>();
     player["volume"] = static_cast<int>(volume * 100.0f);
     player["muted"] = muted;
   });
@@ -78,16 +76,16 @@ inline std::string build_client_state(float volume, bool muted) {
 inline std::string build_controller_command(const std::string &command) {
   return json::build_json([&](JsonObject root) {
     root["type"] = "server/command";  // client sends this to request a command
-    root["data"]["command"] = command;
+    root["payload"]["command"] = command;
   });
 }
 
 inline std::string build_set_volume_command(float volume) {
   return json::build_json([&](JsonObject root) {
     root["type"] = "server/command";
-    JsonObject data = root["data"].to<JsonObject>();
-    data["command"] = "volume";
-    data["volume"] = static_cast<int>(volume * 100.0f);
+    JsonObject payload = root["payload"].to<JsonObject>();
+    payload["command"] = "volume";
+    payload["volume"] = static_cast<int>(volume * 100.0f);
   });
 }
 
