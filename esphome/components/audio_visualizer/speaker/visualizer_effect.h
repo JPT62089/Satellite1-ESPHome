@@ -129,7 +129,7 @@ class PulseBeatEffect : public VisualizerEffect {
 };
 
 // Preset 3: VU Sweep
-// LEDs fill clockwise with RMS; green to yellow to red gradient
+// LEDs fill as an arc from the configurable start LED; direction and mirroring are runtime-configurable
 class VUSweepEffect : public VisualizerEffect {
  public:
   explicit VUSweepEffect(const char *name) : VisualizerEffect(name) {}
@@ -137,7 +137,7 @@ class VUSweepEffect : public VisualizerEffect {
 };
 
 // Preset 4: Waveform Orbit
-// RMS history orbits the ring: new energy enters at LED 0 and chases around
+// RMS history orbits the ring: new energy enters at the configurable start LED and trails outward
 class WaveformOrbitEffect : public VisualizerEffect {
  public:
   explicit WaveformOrbitEffect(const char *name) : VisualizerEffect(name) {}
