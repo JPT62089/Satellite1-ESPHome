@@ -69,6 +69,7 @@ class VisualizerEffect : public light::AddressableLightEffect {
   void set_mirror(switch_::Switch *s) { this->mirror_ = s; }
   void set_start(number::Number *n) { this->start_ = n; }
 
+ protected:
   float get_intensity_scale() const {
     if (!this->intensity_)
       return 1.0f;
@@ -76,9 +77,12 @@ class VisualizerEffect : public light::AddressableLightEffect {
   }
   bool get_reverse() const { return this->reverse_ && this->reverse_->state; }
   bool get_mirror() const { return this->mirror_ && this->mirror_->state; }
-  int get_start_offset() const { return this->start_ ? (int) this->start_->state : 0; }
+  int get_start_offset() const {
+    if (!this->start_)
+      return 0;
+    return std::max(0, (int) this->start_->state);
+  }
 
- protected:
   /// Returns true if enough time has elapsed since last_run_. Call at the start of apply().
   bool should_update_() {
     uint32_t interval = this->update_interval_;  // fallback: 33ms
