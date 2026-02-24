@@ -16,14 +16,29 @@ void SpectrumRingEffect::apply(light::AddressableLight &it, const Color &current
     return;
   float bands[NUM_BANDS] = {};
   this->viz_->get_bands(bands);
+
   int count = std::min((int) it.size(), (int) NUM_BANDS);
+  float scale = this->get_intensity_scale();
+  bool rev = this->get_reverse();
+  bool mir = this->get_mirror();
+  int start = this->get_start_offset();
+  int half = count / 2;
+
   for (int i = 0; i < count; i++) {
-    // Hue sweeps from 0.67 (blue) at bass to 0.0 (red) at treble
-    float hue = (count > 1) ? 0.67f * (1.0f - (float) i / (count - 1)) : 0.67f;
-    float val = bands[i];
-    // Sqrt compression so quieter high-frequency bands are still visible
-    float brightness = (val > 0.01f) ? std::min(1.0f, sqrtf(val)) : 0.0f;
-    it[i] = hsv_to_color(hue, 1.0f, brightness);
+    int band_i;
+    if (mir) {
+      // Symmetric: LEDs 0..half-1 and count-1..half use the same N/2 bands
+      int mirror_i = (i < half) ? i : (count - 1 - i);
+      band_i = rev ? (half - 1 - mirror_i) : mirror_i;
+    } else {
+      band_i = rev ? (count - 1 - i) : i;
+    }
+    band_i = std::max(0, std::min(count - 1, band_i));
+
+    float hue = (count > 1) ? 0.67f * (1.0f - (float) band_i / (count - 1)) : 0.67f;
+    float val = bands[band_i];
+    float brightness = (val > 0.01f) ? std::min(1.0f, sqrtf(val) * scale) : 0.0f;
+    it[(i + start) % count] = hsv_to_color(hue, 1.0f, brightness);
   }
   for (int i = count; i < it.size(); i++)
     it[i] = Color(0, 0, 0);
