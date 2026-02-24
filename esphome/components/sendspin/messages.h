@@ -107,20 +107,23 @@ inline bool parse_stream_start(const std::string &json_str, StreamStartInfo &out
   return json::parse_json(json_str, [&](JsonObject root) -> bool {
     if (!root["type"].is<std::string>() || root["type"].as<std::string>() != "stream/start")
       return false;
-    if (!root["data"].is<JsonObject>())
+    if (!root["payload"].is<JsonObject>())
       return false;
-    JsonObject data = root["data"].as<JsonObject>();
-    if (!data["codec"].is<std::string>())
+    JsonObject payload = root["payload"].as<JsonObject>();
+    if (!payload["player"].is<JsonObject>())
       return false;
-    out.codec = data["codec"].as<std::string>();
-    if (data["sample_rate"].is<int>())
-      out.sample_rate = data["sample_rate"].as<int>();
-    if (data["channels"].is<int>())
-      out.channels = data["channels"].as<int>();
-    if (data["bit_depth"].is<int>())
-      out.bit_depth = data["bit_depth"].as<int>();
-    if (data["start_ts_us"].is<int64_t>())
-      out.start_ts_us = data["start_ts_us"].as<int64_t>();
+    JsonObject player = payload["player"].as<JsonObject>();
+    if (!player["codec"].is<std::string>())
+      return false;
+    out.codec = player["codec"].as<std::string>();
+    if (player["sample_rate"].is<int>())
+      out.sample_rate = player["sample_rate"].as<int>();
+    if (player["channels"].is<int>())
+      out.channels = player["channels"].as<int>();
+    if (player["bit_depth"].is<int>())
+      out.bit_depth = player["bit_depth"].as<int>();
+    if (player["start_ts_us"].is<int64_t>())
+      out.start_ts_us = player["start_ts_us"].as<int64_t>();
     out.valid = true;
     return true;
   });
@@ -137,15 +140,15 @@ inline bool parse_server_time(const std::string &json_str, ClockSyncResponse &ou
   return json::parse_json(json_str, [&](JsonObject root) -> bool {
     if (!root["type"].is<std::string>() || root["type"].as<std::string>() != "server/time")
       return false;
-    if (!root["data"].is<JsonObject>())
+    if (!root["payload"].is<JsonObject>())
       return false;
-    JsonObject data = root["data"].as<JsonObject>();
-    if (!data["client_transmitted"].is<int64_t>() || !data["server_received"].is<int64_t>() ||
-        !data["server_transmitted"].is<int64_t>())
+    JsonObject payload = root["payload"].as<JsonObject>();
+    if (!payload["client_transmitted"].is<int64_t>() || !payload["server_received"].is<int64_t>() ||
+        !payload["server_transmitted"].is<int64_t>())
       return false;
-    out.client_transmitted = data["client_transmitted"].as<int64_t>();
-    out.server_received = data["server_received"].as<int64_t>();
-    out.server_transmitted = data["server_transmitted"].as<int64_t>();
+    out.client_transmitted = payload["client_transmitted"].as<int64_t>();
+    out.server_received = payload["server_received"].as<int64_t>();
+    out.server_transmitted = payload["server_transmitted"].as<int64_t>();
     out.valid = true;
     return true;
   });
