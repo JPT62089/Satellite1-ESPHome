@@ -84,11 +84,38 @@ void VUSweepEffect::apply(light::AddressableLight &it, const Color &current_colo
   if (!this->should_update_())
     return;
   float rms = this->viz_->get_rms();
-  int lit = (int) (rms * it.size() + 0.5f);
-  lit = std::max(0, std::min((int) it.size(), lit));
-  for (int i = 0; i < it.size(); i++) {
-    if (i < lit) {
-      float t = (it.size() > 1) ? (float) i / (it.size() - 1) : 0.0f;
+  float scale = this->get_intensity_scale();
+  bool rev = this->get_reverse();
+  bool mir = this->get_mirror();
+  int start = this->get_start_offset();
+  int n = it.size();
+
+  // Scale RMS by intensity; lit count is how many LEDs to fill
+  int lit = (int) (rms * scale * n + 0.5f);
+  lit = std::max(0, std::min(n, lit));
+
+  for (int i = 0; i < n; i++) {
+    // pos: clockwise distance from the start LED (0 = at start)
+    int pos = (i - start + n) % n;
+
+    bool on;
+    if (mir) {
+      int half_lit = lit / 2;
+      if (rev) {
+        // Fill from antipode (start + n/2) symmetrically in both directions
+        int apos = (pos + n / 2) % n;  // distance from antipode
+        on = (apos < half_lit) || (apos >= n - half_lit);
+      } else {
+        // Fill from start symmetrically clockwise and counterclockwise
+        on = (pos < half_lit) || (pos >= n - half_lit);
+      }
+    } else {
+      // Fill as a single arc
+      on = rev ? (pos >= n - lit) : (pos < lit);
+    }
+
+    if (on) {
+      float t = (n > 1) ? (float) pos / (n - 1) : 0.0f;
       Color c;
       if (t < 0.5f) {
         // green to yellow
