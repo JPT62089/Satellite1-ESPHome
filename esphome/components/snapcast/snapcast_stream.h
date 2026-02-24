@@ -108,8 +108,8 @@ class SnapcastStream {
   uint32_t port_;
   uint32_t server_buffer_size_{0};
   int32_t latency_{0};
-  uint8_t volume_{0};
-  bool muted_{false};
+  std::atomic<uint8_t> volume_{0};
+  std::atomic<bool> muted_{false};
   uint32_t reconnect_counter_{0};
 
   StreamState state_{StreamState::DESTROYED};
@@ -132,6 +132,7 @@ class SnapcastStream {
   TaskHandle_t stream_task_handle_{nullptr};
   StaticTask_t task_stack_;
   StackType_t *task_stack_buffer_{nullptr};
+  QueueHandle_t outgoing_queue_{nullptr};
 
   void stream_task_();
 

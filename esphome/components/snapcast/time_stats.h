@@ -92,6 +92,7 @@ class TimeStats {
   void set_request_time(uint16_t msg_id, tv_t request_time) {
     const int64_t us = request_time.to_microseconds();
 
+    xSemaphoreTake(req_mu_, portMAX_DELAY);
     if (pending_req_send_us_.size() >= MAX_PENDING_REQ) {
       // Drop the oldest entry (simple O(n) fallback; MAX_PENDING_REQ is tiny)
       auto oldest = pending_req_send_us_.begin();
@@ -101,7 +102,7 @@ class TimeStats {
       }
       pending_req_send_us_.erase(oldest);
     }
-    xSemaphoreTake(req_mu_, portMAX_DELAY);
+
     pending_req_send_us_[msg_id] = us;
     xSemaphoreGive(req_mu_);
   }
@@ -218,6 +219,9 @@ class TimeStats {
     reset_kalman_state_();
 
     smoothing_ = base_smoothing_ = cfg_.base_smoothing;
+    xSemaphoreTake(req_mu_, portMAX_DELAY);
+    pending_req_send_us_.clear();
+    xSemaphoreGive(req_mu_);
   }
 
   size_t outliers() const { return outlier_count_; }
@@ -257,7 +261,7 @@ class TimeStats {
   // ---------------- RTT adaptive stats ----------------
   SemaphoreHandle_t req_mu_ = xSemaphoreCreateMutex();
   std::unordered_map<uint16_t, int64_t> pending_req_send_us_;
-  static constexpr size_t MAX_PENDING_REQ = 8;
+  static constexpr size_t MAX_PENDING_REQ = 32;
   bool rtt_inited_ = false;
   int64_t min_rtt_us_ = 0;
   int64_t last_rtt_us_ = 0;
