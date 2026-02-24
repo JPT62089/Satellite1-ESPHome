@@ -57,6 +57,8 @@ void SendspinClient::disable() {
 }
 
 void SendspinClient::report_volume(float volume, bool muted) {
+  this->last_volume_ = volume;
+  this->last_muted_ = muted;
   if (this->stream_.is_connected()) {
     this->stream_.send_text(build_client_state(volume, muted));
   }
@@ -79,6 +81,8 @@ void SendspinClient::on_stream_state_changed_(SendspinStreamState state) {
     this->last_clock_sync_ms_ = 0;
   } else if (state == SendspinStreamState::READY) {
     this->clock_synced_ = false;
+    if (this->media_player_ != nullptr)
+      this->stream_.send_text(build_client_state(this->last_volume_, this->last_muted_));
   } else if (state == SendspinStreamState::STREAMING) {
     // Trigger media pipeline via the media player
     if (this->media_player_ != nullptr) {

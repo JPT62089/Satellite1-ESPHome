@@ -52,6 +52,8 @@ class SendspinClient : public Component {
   static constexpr uint32_t CLOCK_SYNC_INTERVAL_MS = 2000;
   static constexpr uint32_t CLOCK_SYNC_INITIAL_INTERVAL_MS = 100;
   bool clock_synced_{false};
+  float last_volume_{1.0f};
+  bool last_muted_{false};
 };
 
 }  // namespace sendspin
