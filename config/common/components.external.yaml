@@ -19,6 +19,7 @@ external_components:
       - resampler
       - satellite1
       - satellite1_buttons
+      - sendspin
       - snapcast
       - speaker
       - tas2780
