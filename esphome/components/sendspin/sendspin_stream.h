@@ -8,6 +8,8 @@
 #include "esphome/core/helpers.h"
 #include "esphome/components/audio/chunked_ring_buffer.h"
 
+#include <freertos/FreeRTOS.h>
+
 #include "esp_http_server.h"
 #include "esp_err.h"
 
@@ -86,10 +88,11 @@ class SendspinStream {
 
   std::atomic<SendspinStreamState> state_{SendspinStreamState::IDLE};
   std::atomic<int64_t> clock_offset_us_{0};  // server_clock - local_clock (microseconds)
-  bool codec_header_sent_{false};
+  std::atomic<bool> codec_header_sent_{false};
 
-  std::weak_ptr<audio::TimedRingBuffer> write_ring_buffer_;
-  TaskHandle_t notification_target_{nullptr};
+  std::weak_ptr<audio::TimedRingBuffer> write_ring_buffer_;  // guarded by ring_buf_mux_
+  TaskHandle_t notification_target_{nullptr};                 // guarded by ring_buf_mux_
+  portMUX_TYPE ring_buf_mux_{portMUX_INITIALIZER_UNLOCKED};
 
   std::function<void(SendspinStreamState)> on_state_change_;
   std::function<void()> on_clock_synced_;

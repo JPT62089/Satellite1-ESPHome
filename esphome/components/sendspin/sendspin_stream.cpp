@@ -42,7 +42,7 @@ esp_err_t SendspinStream::start_server() {
       .handler = SendspinStream::ws_handler_,
       .user_ctx = this,
       .is_websocket = true,
-      .handle_ws_control_frames = false,
+      .handle_ws_control_frames = true,
       .supported_subprotocol = nullptr,
   };
 
@@ -71,18 +71,23 @@ void SendspinStream::stop_server() {
 
 esp_err_t SendspinStream::start_with_notify(std::weak_ptr<audio::TimedRingBuffer> ring_buffer,
                                             TaskHandle_t notification_task) {
+  // Reset the ring buffer before taking the lock so we don't hold it during allocation
+  auto rb_snapshot = ring_buffer.lock();
+  if (rb_snapshot)
+    rb_snapshot->reset();
+  portENTER_CRITICAL(&this->ring_buf_mux_);
   this->write_ring_buffer_ = ring_buffer;
   this->notification_target_ = notification_task;
-  this->codec_header_sent_ = false;
-  auto rb = ring_buffer.lock();
-  if (rb)
-    rb->reset();
+  this->codec_header_sent_.store(false, std::memory_order_relaxed);
+  portEXIT_CRITICAL(&this->ring_buf_mux_);
   return ESP_OK;
 }
 
 esp_err_t SendspinStream::stop_streaming() {
+  portENTER_CRITICAL(&this->ring_buf_mux_);
   this->notification_target_ = nullptr;
   this->write_ring_buffer_.reset();
+  portEXIT_CRITICAL(&this->ring_buf_mux_);
   if (this->is_connected())
     this->set_state_(SendspinStreamState::READY);
   return ESP_OK;
@@ -116,9 +121,14 @@ esp_err_t SendspinStream::ws_handler_(httpd_req_t *req) {
   auto *self = static_cast<SendspinStream *>(req->user_ctx);
 
   if (req->method == HTTP_GET) {
-    // New WebSocket connection established
+    // Reject if a client is already connected — only one MA client at a time
+    if (self->connected_fd_.load(std::memory_order_relaxed) >= 0) {
+      ESP_LOGW(TAG, "Rejecting new MA connection — already connected (fd=%d)",
+               self->connected_fd_.load(std::memory_order_relaxed));
+      return ESP_FAIL;
+    }
     self->connected_fd_.store(httpd_req_to_sockfd(req), std::memory_order_relaxed);
-    self->codec_header_sent_ = false;
+    self->codec_header_sent_.store(false, std::memory_order_relaxed);
     ESP_LOGI(TAG, "MA connected (fd=%d)", self->connected_fd_.load(std::memory_order_relaxed));
     self->set_state_(SendspinStreamState::CONNECTED);
     return ESP_OK;
@@ -179,6 +189,13 @@ void SendspinStream::handle_text_frame_(const std::string &json_str) {
   if (parse_stream_start(json_str, stream_info)) {
     ESP_LOGI(TAG, "stream/start: codec=%s %dHz %dch", stream_info.codec.c_str(), stream_info.sample_rate,
              stream_info.channels);
+    // Seed the clock offset from start_ts_us so early frames have a plausible timestamp
+    // before the first NTP-style server/time round-trip completes.
+    if (stream_info.start_ts_us != 0) {
+      int64_t rough_offset = stream_info.start_ts_us - esp_timer_get_time();
+      this->clock_offset_us_.store(rough_offset, std::memory_order_relaxed);
+      ESP_LOGD(TAG, "Clock seeded from stream/start: offset=%" PRId64 " us (rough)", rough_offset);
+    }
     this->set_state_(SendspinStreamState::STREAMING);
     return;
   }
@@ -204,7 +221,13 @@ void SendspinStream::handle_binary_frame_(const uint8_t *data, size_t len) {
   if (audio_len == 0)
     return;
 
+  // Snapshot ring buffer and notification target under the spinlock to avoid
+  // concurrent write from main task (start_with_notify / stop_streaming).
+  portENTER_CRITICAL(&this->ring_buf_mux_);
   auto rb = this->write_ring_buffer_.lock();
+  TaskHandle_t target = this->notification_target_;
+  portEXIT_CRITICAL(&this->ring_buf_mux_);
+
   if (!rb)
     return;
 
@@ -233,8 +256,8 @@ void SendspinStream::handle_binary_frame_(const uint8_t *data, size_t len) {
   rb->release_write_chunk(timed_chunk, audio_len);
 
   // Wake the AudioReader task so it processes the new data promptly
-  if (this->notification_target_ != nullptr) {
-    xTaskNotify(this->notification_target_, static_cast<uint32_t>(this->state_.load(std::memory_order_relaxed)),
+  if (target != nullptr) {
+    xTaskNotify(target, static_cast<uint32_t>(this->state_.load(std::memory_order_relaxed)),
                 eSetValueWithOverwrite);
   }
 }

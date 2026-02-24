@@ -15,8 +15,12 @@ class SendspinController {
  public:
   SendspinController() { this->queue_ = xQueueCreate(8, sizeof(char *)); }
   ~SendspinController() {
-    if (this->queue_ != nullptr)
+    if (this->queue_ != nullptr) {
+      char *msg = nullptr;
+      while (xQueueReceive(this->queue_, &msg, 0) == pdTRUE)
+        delete[] msg;
       vQueueDelete(this->queue_);
+    }
   }
 
   void set_stream(SendspinStream *stream) { this->stream_ = stream; }

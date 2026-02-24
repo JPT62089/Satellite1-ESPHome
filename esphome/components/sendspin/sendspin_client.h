@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "esphome/core/component.h"
 #include "esphome/core/defines.h"
 #include "esphome/core/helpers.h"
@@ -51,7 +53,7 @@ class SendspinClient : public Component {
   uint32_t last_clock_sync_ms_{0};
   static constexpr uint32_t CLOCK_SYNC_INTERVAL_MS = 2000;
   static constexpr uint32_t CLOCK_SYNC_INITIAL_INTERVAL_MS = 100;
-  bool clock_synced_{false};
+  std::atomic<bool> clock_synced_{false};
   float last_volume_{1.0f};
   bool last_muted_{false};
 };
