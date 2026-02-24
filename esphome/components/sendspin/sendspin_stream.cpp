@@ -17,8 +17,11 @@ esp_err_t SendspinStream::start_server() {
     return ESP_ERR_INVALID_STATE;
   }
 
-  // Register mDNS service so MA can discover this device
-  esp_err_t err = mdns_service_add(nullptr, "_sendspin", "_tcp", this->port_, nullptr, 0);
+  // Register mDNS service so MA can discover this device.
+  // path TXT record is required by spec; name is optional but useful.
+  std::string friendly_name = App.get_friendly_name();
+  mdns_txt_item_t txt[] = {{"path", "/sendspin"}, {"name", friendly_name.c_str()}};
+  esp_err_t err = mdns_service_add(nullptr, "_sendspin", "_tcp", this->port_, txt, std::size(txt));
   if (err != ESP_OK) {
     ESP_LOGW(TAG, "mdns_service_add failed: %s (may already be registered)", esp_err_to_name(err));
   }
