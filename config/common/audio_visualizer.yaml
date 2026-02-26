@@ -59,7 +59,7 @@ select:
       - "Pulse"
       - "VU Sweep"
       - "Waveform"
-    initial_option: "Spectrum"
+    initial_option: "Off"
     optimistic: true
     restore_value: true
     on_value:
