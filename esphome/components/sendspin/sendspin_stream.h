@@ -92,7 +92,7 @@ class SendspinStream {
 
   std::weak_ptr<audio::TimedRingBuffer> write_ring_buffer_;  // guarded by ring_buf_mux_
   TaskHandle_t notification_target_{nullptr};                 // guarded by ring_buf_mux_
-  portMUX_TYPE ring_buf_mux_{portMUX_INITIALIZER_UNLOCKED};
+  portMUX_TYPE ring_buf_mux_ = portMUX_INITIALIZER_UNLOCKED;
 
   std::function<void(SendspinStreamState)> on_state_change_;
   std::function<void()> on_clock_synced_;

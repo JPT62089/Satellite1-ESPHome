@@ -150,7 +150,6 @@ class SnapcastStream {
   bool start_after_connecting_{false};
   bool codec_header_sent_{false};
   uint32_t past_drop_streak_{0};  // consecutive "chunk in past" drops — for stutter diagnostics
-  QueueHandle_t outgoing_queue_{nullptr};
 };
 
 }  // namespace snapcast
