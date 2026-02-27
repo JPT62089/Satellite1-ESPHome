@@ -49,6 +49,7 @@ async def to_code(config):
     await cg.register_component(var, config)
     cg.add_define("USE_SENDSPIN", True)
     esp32.add_idf_sdkconfig_option("CONFIG_HTTPD_WS_SUPPORT", True)
+    esp32.add_idf_sdkconfig_option("CONFIG_LWIP_MAX_SOCKETS", 16)
 
 
 @automation.register_action("sendspin.enable", EnableAction, SENDSPIN_ACTION_SCHEMA)

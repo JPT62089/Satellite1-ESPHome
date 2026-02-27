@@ -29,6 +29,7 @@ esp_err_t SendspinStream::start_server() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = this->port_;
   config.lru_purge_enable = true;
+  config.max_open_sockets = 2;  // Sendspin allows only one MA client; keep socket usage low
 
   err = httpd_start(&this->httpd_, &config);
   if (err != ESP_OK) {
