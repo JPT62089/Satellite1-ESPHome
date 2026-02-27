@@ -538,6 +538,9 @@ script:
   - id: control_leds
     then:
       - lambda: |
+          // Guard: skip if voice_assistant_leds hasn't been set up yet (setup_priority -10
+          // runs after select/switch restores at priority 0, which can fire on_value early)
+          if (!id(voice_assistant_leds).is_ready()) return;
           id(check_if_timers_active).execute();
           if (id(is_timer_active)){
             id(fetch_first_active_timer).execute();
