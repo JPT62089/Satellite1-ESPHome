@@ -85,18 +85,33 @@ void SnapcastControlSession::update_from_server_obj_(const JsonObject &server_ob
 }
 
 void SnapcastControlSession::notification_loop() {
+  static constexpr uint32_t INITIAL_RETRY_MS = 10000;
+  static constexpr uint32_t MAX_RETRY_MS = 300000;  // 5 minutes
+  uint32_t retry_delay_ms = INITIAL_RETRY_MS;
+
   this->line_buffer_.reserve(1024);
   while (this->notification_task_should_run_) {
-    // Initialize transport
+    // Clean up any previous transport before creating a new one
     if (this->transport_ != nullptr) {
       esp_transport_close(this->transport_);
       esp_transport_destroy(this->transport_);
+      this->transport_ = nullptr;
     }
+
+    // Check for disconnect before attempting a new connection
+    uint32_t pre_notify = 0;
+    if (xTaskNotifyWait(0, DISCONNECT_BIT, &pre_notify, 0) == pdTRUE) {
+      if (pre_notify & DISCONNECT_BIT) {
+        break;
+      }
+    }
+
     this->transport_ = esp_transport_tcp_init();
 
     if (this->transport_ == nullptr) {
       ESP_LOGE(TAG, "Failed to initialize transport");
-      vTaskDelay(pdMS_TO_TICKS(10000));
+      vTaskDelay(pdMS_TO_TICKS(retry_delay_ms));
+      retry_delay_ms = std::min(retry_delay_ms * 2, MAX_RETRY_MS);
       continue;
     }
     esp_transport_keep_alive_t keep_alive_config = {
@@ -107,12 +122,21 @@ void SnapcastControlSession::notification_loop() {
     };
     esp_transport_tcp_set_keep_alive(this->transport_, &keep_alive_config);
     // Try to connect
-    error_t err = esp_transport_connect(this->transport_, this->server_.c_str(), this->port_, -1);
+    error_t err = esp_transport_connect(this->transport_, this->server_.c_str(), this->port_, 5000);
     if (err != 0) {
-      ESP_LOGE(TAG, "Connection failed with error: %d", errno);
-      vTaskDelay(pdMS_TO_TICKS(10000));
+      ESP_LOGE(TAG, "Connection failed with error: %d (retry in %" PRIu32 "s)", errno, retry_delay_ms / 1000);
+      // Immediately release transport so the socket is freed during the backoff wait
+      esp_transport_close(this->transport_);
+      esp_transport_destroy(this->transport_);
+      this->transport_ = nullptr;
+      vTaskDelay(pdMS_TO_TICKS(retry_delay_ms));
+      retry_delay_ms = std::min(retry_delay_ms * 2, MAX_RETRY_MS);
       continue;
     }
+
+    // Connection succeeded — reset backoff
+    retry_delay_ms = INITIAL_RETRY_MS;
+    ESP_LOGI(TAG, "Connected to %s:%" PRIu32, this->server_.c_str(), this->port_);
 
     // Send initial request after connecting
     this->send_rpc_request_(
@@ -127,7 +151,10 @@ void SnapcastControlSession::notification_loop() {
     static constexpr size_t MAX_LINE = 16 * 1024;
     while (true) {
       uint32_t notify_value = 0;
-      if (xTaskNotifyWait(0, RECONNECT_BIT, &notify_value, 0) > 0) {
+      if (xTaskNotifyWait(0, RECONNECT_BIT | DISCONNECT_BIT, &notify_value, 0) == pdTRUE) {
+        if (notify_value & DISCONNECT_BIT) {
+          this->notification_task_should_run_ = false;
+        }
         break;
       }
 
