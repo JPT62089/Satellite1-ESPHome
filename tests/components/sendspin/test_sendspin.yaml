@@ -108,15 +108,29 @@ media_player:
       num_channels: 2
       sample_rate: 48000
 
-switch:
+select:
   - platform: template
-    id: sendspin_switch
-    name: "Sendspin"
-    icon: "mdi:music-circle"
+    name: "Music streaming"
+    id: music_streaming_select
+    icon: "mdi:cast-audio"
+    options:
+      - "Snapcast"
+      - "Sendspin"
+      - "Off"
+    initial_option: "Snapcast"
     entity_category: config
     optimistic: true
-    restore_mode: RESTORE_DEFAULT_ON
-    on_turn_on:
-      - sendspin.enable:
-    on_turn_off:
+    restore_value: true
+    on_value:
+      - snapcast.disable:
       - sendspin.disable:
+      - if:
+          condition:
+            lambda: return x == "Snapcast";
+          then:
+            - snapcast.enable:
+      - if:
+          condition:
+            lambda: return x == "Sendspin";
+          then:
+            - sendspin.enable:
