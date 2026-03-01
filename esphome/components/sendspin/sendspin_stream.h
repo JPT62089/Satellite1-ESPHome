@@ -57,6 +57,10 @@ class SendspinStream {
   bool is_streaming() const { return state_.load(std::memory_order_relaxed) == SendspinStreamState::STREAMING; }
   bool is_idle() const { return state_.load(std::memory_order_relaxed) == SendspinStreamState::IDLE; }
 
+  /// Pre-build the client/hello JSON so ws_handler_ can send it synchronously.
+  /// Must be called once from setup(), before the WS server starts.
+  void set_hello_message(std::string msg) { this->hello_message_ = std::move(msg); }
+
   /// Set callback invoked (on main task via defer) when state changes.
   /// IMPORTANT: must only be called once (from setup()), before the WS server starts.
   /// The callback is read from the httpd task without synchronization.
@@ -98,6 +102,8 @@ class SendspinStream {
   std::weak_ptr<audio::TimedRingBuffer> write_ring_buffer_;  // guarded by ring_buf_mux_
   TaskHandle_t notification_target_{nullptr};                 // guarded by ring_buf_mux_
   portMUX_TYPE ring_buf_mux_ = portMUX_INITIALIZER_UNLOCKED;
+
+  std::string hello_message_;  // pre-built client/hello JSON, sent synchronously on connect
 
   std::function<void(SendspinStreamState)> on_state_change_;
   std::function<void()> on_clock_synced_;

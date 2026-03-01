@@ -14,6 +14,9 @@ namespace sendspin {
 static const char *const TAG = "sendspin_client";
 
 void SendspinClient::setup() {
+  // Pre-build client/hello so ws_handler_ can send it synchronously on connect
+  this->stream_.set_hello_message(build_client_hello(get_mac_address_pretty(), App.get_friendly_name()));
+
   this->stream_.set_on_state_change(
       [this](SendspinStreamState state) { this->defer([this, state]() { this->on_stream_state_changed_(state); }); });
   this->stream_.set_on_clock_synced([this]() { this->clock_synced_.store(true, std::memory_order_relaxed); });
@@ -83,9 +86,7 @@ void SendspinClient::on_stream_state_changed_(SendspinStreamState state) {
   ESP_LOGD(TAG, "Stream state -> %d", static_cast<int>(state));
 
   if (state == SendspinStreamState::CONNECTED) {
-    // Send client/hello immediately after WS handshake
-    std::string hello = build_client_hello(get_mac_address_pretty(), App.get_friendly_name());
-    this->stream_.send_text(hello);
+    // client/hello is already sent synchronously from ws_handler_ — just reset clock state
     this->clock_synced_.store(false, std::memory_order_relaxed);
     this->last_clock_sync_ms_ = 0;
   } else if (state == SendspinStreamState::READY) {

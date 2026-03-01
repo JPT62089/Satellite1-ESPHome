@@ -160,6 +160,23 @@ esp_err_t SendspinStream::ws_handler_(httpd_req_t *req) {
     self->connected_fd_.store(httpd_req_to_sockfd(req), std::memory_order_relaxed);
     self->codec_header_sent_.store(false, std::memory_order_relaxed);
     ESP_LOGI(TAG, "MA connected (fd=%d)", self->connected_fd_.load(std::memory_order_relaxed));
+
+    // Send client/hello SYNCHRONOUSLY before returning from the handler.
+    // This guarantees it is the very first WebSocket message MA receives —
+    // no defer() delay, no async queue, no race conditions.
+    if (!self->hello_message_.empty()) {
+      httpd_ws_frame_t hello_frame = {};
+      hello_frame.type = HTTPD_WS_TYPE_TEXT;
+      hello_frame.payload = reinterpret_cast<uint8_t *>(const_cast<char *>(self->hello_message_.c_str()));
+      hello_frame.len = self->hello_message_.size();
+      esp_err_t hello_err = httpd_ws_send_frame(req, &hello_frame);
+      if (hello_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to send client/hello: %s", esp_err_to_name(hello_err));
+      } else {
+        ESP_LOGI(TAG, "client/hello sent (%u bytes)", (unsigned) self->hello_message_.size());
+      }
+    }
+
     self->set_state_(SendspinStreamState::CONNECTED);
     return ESP_OK;
   }
