@@ -49,6 +49,9 @@ inline std::string build_client_hello(const std::string &client_id, const std::s
     fmt["sample_rate"] = 48000;
     fmt["bit_depth"] = 16;
     player_support["buffer_capacity"] = 131072;  // 128 KB
+    JsonArray commands = player_support["supported_commands"].to<JsonArray>();
+    commands.add("volume");
+    commands.add("mute");
   });
 }
 
