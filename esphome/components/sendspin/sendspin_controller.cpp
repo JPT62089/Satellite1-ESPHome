@@ -23,7 +23,7 @@ void SendspinController::enqueue_(const std::string &msg) {
 }
 
 void SendspinController::flush_one() {
-  if (this->stream_ == nullptr || !this->stream_->is_connected())
+  if (this->stream_ == nullptr || !this->stream_->is_ready())
     return;
   char *msg = nullptr;
   if (xQueueReceive(this->queue_, &msg, 0) == pdTRUE) {

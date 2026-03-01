@@ -38,8 +38,11 @@ void SendspinClient::loop() {
     this->stream_.start_server();
   }
 
-  // Periodic clock sync while connected
-  if (this->stream_.is_connected()) {
+  // Periodic clock sync — only after hello exchange (READY/STREAMING).
+  // Using is_ready() prevents sending client/time before client/hello,
+  // which races because state is set atomically from the httpd task
+  // but client/hello is sent via a deferred callback.
+  if (this->stream_.is_ready()) {
     uint32_t interval = this->clock_synced_.load(std::memory_order_relaxed) ? CLOCK_SYNC_INTERVAL_MS : CLOCK_SYNC_INITIAL_INTERVAL_MS;
     if (millis() - this->last_clock_sync_ms_ >= interval) {
       this->do_clock_sync_();
@@ -65,7 +68,7 @@ void SendspinClient::disable() {
 void SendspinClient::report_volume(float volume, bool muted) {
   this->last_volume_ = volume;
   this->last_muted_ = muted;
-  if (this->stream_.is_connected()) {
+  if (this->stream_.is_ready()) {
     this->stream_.send_text(build_client_state(volume, muted));
   }
 }

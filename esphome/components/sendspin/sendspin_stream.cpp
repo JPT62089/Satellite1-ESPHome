@@ -4,6 +4,9 @@
 #include "esphome/core/application.h"
 #include "esphome/core/log.h"
 
+#include <cstdlib>
+#include <cstring>
+
 #include "mdns.h"
 #include "esp_timer.h"
 
@@ -94,16 +97,42 @@ esp_err_t SendspinStream::stop_streaming() {
   return ESP_OK;
 }
 
+// Callback scheduled via httpd_queue_work to free heap-allocated payloads
+// after httpd_ws_send_frame_async's internal work item has consumed them.
+static void free_send_payload_(void *arg) { free(arg); }
+
 esp_err_t SendspinStream::send_text(const std::string &msg) {
   if (this->httpd_ == nullptr || this->connected_fd_.load(std::memory_order_relaxed) < 0)
     return ESP_ERR_INVALID_STATE;
 
+  int fd = this->connected_fd_.load(std::memory_order_relaxed);
+
+  // httpd_ws_send_frame_async does NOT copy the payload — it only copies the
+  // httpd_ws_frame_t struct (which contains a pointer).  The caller's string
+  // is typically a local/temporary, so we must heap-allocate a copy that
+  // outlives the async work item.
+  auto *payload = static_cast<uint8_t *>(malloc(msg.size()));
+  if (payload == nullptr)
+    return ESP_ERR_NO_MEM;
+  std::memcpy(payload, msg.c_str(), msg.size());
+
   httpd_ws_frame_t frame = {};
   frame.type = HTTPD_WS_TYPE_TEXT;
-  frame.payload = reinterpret_cast<uint8_t *>(const_cast<char *>(msg.c_str()));
+  frame.payload = payload;
   frame.len = msg.size();
-  // httpd_ws_send_frame_async is thread-safe: safe to call from any task
-  return httpd_ws_send_frame_async(this->httpd_, this->connected_fd_.load(std::memory_order_relaxed), &frame);
+
+  esp_err_t err = httpd_ws_send_frame_async(this->httpd_, fd, &frame);
+  if (err != ESP_OK) {
+    free(payload);
+    return err;
+  }
+
+  // httpd_ws_send_frame_async queued an internal work item that references
+  // payload.  Queue a second work item to free it AFTER the send completes.
+  // httpd_queue_work is FIFO, so the free always runs after the send.
+  httpd_queue_work(this->httpd_, free_send_payload_, payload);
+
+  return ESP_OK;
 }
 
 void SendspinStream::update_clock_offset(int64_t client_transmitted, int64_t server_received,

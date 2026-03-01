@@ -49,6 +49,11 @@ class SendspinStream {
     return s == SendspinStreamState::CONNECTED || s == SendspinStreamState::READY ||
            s == SendspinStreamState::STREAMING;
   }
+  /// True when hello exchange is complete (READY or STREAMING) — safe for clock sync
+  bool is_ready() const {
+    auto s = state_.load(std::memory_order_relaxed);
+    return s == SendspinStreamState::READY || s == SendspinStreamState::STREAMING;
+  }
   bool is_streaming() const { return state_.load(std::memory_order_relaxed) == SendspinStreamState::STREAMING; }
   bool is_idle() const { return state_.load(std::memory_order_relaxed) == SendspinStreamState::IDLE; }
 

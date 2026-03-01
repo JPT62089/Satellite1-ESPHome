@@ -91,7 +91,10 @@ inline std::string build_set_volume_command(float volume) {
 
 // Outbound: client/goodbye
 inline std::string build_client_goodbye() {
-  return json::build_json([](JsonObject root) { root["type"] = "client/goodbye"; });
+  return json::build_json([](JsonObject root) {
+    root["type"] = "client/goodbye";
+    root["payload"].to<JsonObject>();  // MA requires a payload object
+  });
 }
 
 struct StreamStartInfo {
